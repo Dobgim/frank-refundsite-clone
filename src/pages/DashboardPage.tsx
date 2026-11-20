@@ -1,11 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import {
   ArrowRight,
+  Banknote,
   Bell,
+  CheckCircle,
   ChevronRight,
   CircleCheck,
   ClipboardList,
   CreditCard,
+  FilePlus2,
   FileText,
   FolderOpen,
   Headset,
@@ -15,8 +18,11 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PiggyBank,
   Radar,
   ReceiptText,
+  Send,
+  Settings,
   ShieldAlert,
   ShieldCheck,
   type LucideIcon,
@@ -26,6 +32,16 @@ import '../dashboard.css'
 
 type DashboardTab =
   | 'Overview'
+  | 'My Claims'
+  | 'Notifications'
+  | 'Start a Claim'
+  | 'Verification'
+  | 'Settings'
+  | 'Fund Transfer'
+  | 'Withdraw'
+  | 'Pay Bill'
+  | 'DPS'
+  | 'FDR'
   | 'Loan'
   | 'Transactions'
   | 'Track a Case'
@@ -34,6 +50,16 @@ type DashboardTab =
 
 const navigation: { label: DashboardTab; icon: LucideIcon }[] = [
   { label: 'Overview', icon: LayoutDashboard },
+  { label: 'My Claims', icon: ClipboardList },
+  { label: 'Notifications', icon: Bell },
+  { label: 'Start a Claim', icon: FilePlus2 },
+  { label: 'Verification', icon: ShieldCheck },
+  { label: 'Settings', icon: Settings },
+  { label: 'Fund Transfer', icon: Send },
+  { label: 'Withdraw', icon: Banknote },
+  { label: 'Pay Bill', icon: ReceiptText },
+  { label: 'DPS', icon: PiggyBank },
+  { label: 'FDR', icon: Landmark },
   { label: 'Loan', icon: Landmark },
   { label: 'Transactions', icon: ReceiptText },
   { label: 'Track a Case', icon: Radar },
@@ -42,11 +68,12 @@ const navigation: { label: DashboardTab; icon: LucideIcon }[] = [
 ]
 
 const quickActions: { label: string; icon: LucideIcon; tab: DashboardTab }[] = [
-  { label: 'Loan', icon: Landmark, tab: 'Loan' },
+  { label: 'Send money', icon: Send, tab: 'Fund Transfer' },
+  { label: 'Withdraw', icon: Banknote, tab: 'Withdraw' },
   { label: 'Transactions', icon: CreditCard, tab: 'Transactions' },
-  { label: 'Track a case', icon: Radar, tab: 'Track a Case' },
-  { label: 'Help center', icon: LifeBuoy, tab: 'Help Center' },
-  { label: 'Contact support', icon: Headset, tab: 'Contact Support' },
+  { label: 'Pay a bill', icon: ReceiptText, tab: 'Pay Bill' },
+  { label: 'Savings (DPS)', icon: PiggyBank, tab: 'DPS' },
+  { label: 'Fixed deposit', icon: Landmark, tab: 'FDR' },
 ]
 
 export function DashboardPage() {
@@ -120,11 +147,23 @@ export function DashboardPage() {
 
           <div className="dashboard-demo-notice">
             <ShieldAlert size={20} />
-            <div><strong>Sample dashboard</strong><p>Demo data only. Loan requests and account actions are not submitted or processed.</p></div>
+            <div><strong>Sample dashboard</strong><p>Demo data only. Claims, transfers, loans, and account actions are not submitted or processed.</p></div>
           </div>
 
           {activeTab === 'Overview' ? (
             <Overview onSelect={chooseTab} />
+          ) : activeTab === 'My Claims' ? (
+            <ClaimsPanel onStart={() => chooseTab('Start a Claim')} />
+          ) : activeTab === 'Notifications' ? (
+            <NotificationsPanel />
+          ) : activeTab === 'Start a Claim' ? (
+            <DemoActionPanel key={activeTab} title={activeTab} />
+          ) : activeTab === 'Verification' ? (
+            <VerificationPanel />
+          ) : activeTab === 'Settings' ? (
+            <SettingsPanel />
+          ) : activeTab === 'Fund Transfer' || activeTab === 'Withdraw' || activeTab === 'Pay Bill' || activeTab === 'DPS' || activeTab === 'FDR' ? (
+            <DemoActionPanel key={activeTab} title={activeTab} />
           ) : activeTab === 'Loan' ? (
             <LoanPanel />
           ) : activeTab === 'Transactions' ? (
@@ -212,6 +251,68 @@ function MetricCard({
   )
 }
 
+function ClaimsPanel({ onStart }: { onStart: () => void }) {
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-panel-heading">
+        <div><h2>My claims</h2><p>Track claim requests and their latest updates.</p></div>
+        <button className="dashboard-primary-button" type="button" onClick={onStart}><FilePlus2 size={15} /> Start a claim</button>
+      </div>
+      <div className="dashboard-empty-state spacious">
+        <span><FolderOpen size={22} /></span>
+        <strong>No demo claims yet</strong>
+        <p>Start a sample request to see how the claim flow is organized.</p>
+        <button className="dashboard-outline-button" type="button" onClick={onStart}>Create sample claim</button>
+      </div>
+    </section>
+  )
+}
+
+function NotificationsPanel() {
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-panel-heading"><div><h2>Notifications</h2><p>Messages about this sample account.</p></div></div>
+      <div className="dashboard-notice-item">
+        <span><Bell size={17} /></span>
+        <div><strong>Welcome to your sample dashboard</strong><p>This dashboard uses example information only. No account data is connected.</p></div>
+      </div>
+      <div className="dashboard-notice-item">
+        <span><ShieldAlert size={17} /></span>
+        <div><strong>Verification center</strong><p>Identity verification is not available in this local demo.</p></div>
+      </div>
+    </section>
+  )
+}
+
+function VerificationPanel() {
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-panel-heading"><div><h2>Verification center</h2><p>Review the sample status of your account profile.</p></div></div>
+      <div className="dashboard-verification-card">
+        <ShieldAlert size={20} />
+        <div><strong>Verification is not connected</strong><p>This local preview does not collect identity documents or verify accounts.</p></div>
+      </div>
+      <div className="dashboard-verification-row"><CheckCircle size={18} /><div><strong>Email address</strong><p>Example only · Not verified</p></div><small>Demo</small></div>
+      <div className="dashboard-verification-row"><ShieldCheck size={18} /><div><strong>Identity documents</strong><p>File uploads are disabled in this preview.</p></div><small>Not started</small></div>
+    </section>
+  )
+}
+
+function SettingsPanel() {
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-panel-heading"><div><h2>Profile settings</h2><p>Sample profile details for the visual dashboard.</p></div></div>
+      <div className="dashboard-profile-grid">
+        <div><span>Full name</span><strong>John Doe</strong></div>
+        <div><span>Email address</span><strong>demo@example.com</strong></div>
+        <div><span>Country</span><strong>United Kingdom</strong></div>
+        <div><span>Account type</span><strong>Personal account</strong></div>
+      </div>
+      <p className="dashboard-muted-note">Profile editing is disabled because this sample account is not connected to a backend.</p>
+    </section>
+  )
+}
+
 function CasesPanel({ onSupport }: { onSupport: () => void }) {
   return (
     <section className="dashboard-panel dashboard-page-panel">
@@ -278,6 +379,37 @@ function TransactionsPanel() {
     <section className="dashboard-panel dashboard-page-panel">
       <div className="dashboard-panel-heading"><div><h2>Transactions</h2><p>Example account activity.</p></div></div>
       <div className="dashboard-empty-state spacious"><span><ReceiptText size={22} /></span><strong>No demo transactions</strong><p>Transactions are not connected or processed in this dashboard preview.</p></div>
+    </section>
+  )
+}
+
+function DemoActionPanel({ title }: { title: string }) {
+  const [notice, setNotice] = useState('')
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setNotice(`Demo only — your ${title.toLowerCase()} request was not sent or saved.`)
+  }
+
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-panel-heading"><div><h2>{title}</h2><p>Preview the request form. No financial action will be processed.</p></div></div>
+      <form className="dashboard-request-form" onSubmit={handleSubmit}>
+        <label>Request type
+          <select defaultValue="" required>
+            <option value="" disabled>Select an option</option>
+            <option>{title}</option>
+            <option>Account question</option>
+          </select>
+        </label>
+        <div className="dashboard-form-row">
+          <label>Reference or recipient<input placeholder="Example only" /></label>
+          <label>Amount (optional)<input inputMode="decimal" placeholder="$0.00" /></label>
+        </div>
+        <label>Details<textarea rows={4} placeholder="Add a short description for this sample request" required /></label>
+        <button className="dashboard-primary-button" type="submit">Preview request <ArrowRight size={15} /></button>
+        {notice && <p className="dashboard-form-notice" role="status">{notice}</p>}
+      </form>
     </section>
   )
 }

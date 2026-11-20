@@ -572,6 +572,122 @@
   padding: 25px;
 }
 
+.dashboard-notice-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-top: 1px solid var(--dash-line);
+  padding: 18px 0;
+}
+
+.dashboard-notice-item:first-of-type {
+  margin-top: 18px;
+}
+
+.dashboard-notice-item > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--green);
+  background: #edf4ee;
+}
+
+.dashboard-notice-item strong,
+.dashboard-verification-row strong {
+  font-size: 12px;
+}
+
+.dashboard-notice-item p,
+.dashboard-verification-row p {
+  margin-top: 5px;
+  color: var(--dash-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.dashboard-verification-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 22px;
+  border: 1px solid #cbdcca;
+  border-radius: 6px;
+  padding: 15px;
+  color: #245746;
+  background: #f2f7f1;
+}
+
+.dashboard-verification-card > svg {
+  flex: 0 0 auto;
+}
+
+.dashboard-verification-card strong {
+  font-size: 12px;
+}
+
+.dashboard-verification-card p {
+  margin-top: 5px;
+  color: var(--dash-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.dashboard-verification-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--dash-line);
+  padding: 15px 4px;
+}
+
+.dashboard-verification-row > svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}
+
+.dashboard-verification-row > div {
+  flex: 1;
+}
+
+.dashboard-verification-row small {
+  color: var(--dash-muted);
+  font-size: 10px;
+}
+
+.dashboard-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 23px;
+}
+
+.dashboard-profile-grid > div {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--dash-line);
+  border-radius: 6px;
+  padding: 14px;
+}
+
+.dashboard-profile-grid span,
+.dashboard-muted-note {
+  color: var(--dash-muted);
+  font-size: 10px;
+}
+
+.dashboard-profile-grid strong {
+  color: var(--dash-ink);
+  font-size: 12px;
+}
+
+.dashboard-muted-note {
+  margin-top: 17px;
+  line-height: 1.6;
+}
+
 .dashboard-panel-heading {
   display: flex;
   align-items: center;

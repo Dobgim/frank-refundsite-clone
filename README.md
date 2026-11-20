@@ -11,7 +11,8 @@ React, TypeScript, Vite, and Tailwind CSS recreation of the five public pages:
 It also includes local registration (`/register`) and login (`/login`) UI
 previews based on the supplied reference image, plus a sample user dashboard
 (`/dashboard`) with Loan, Transactions, Track a Case, Help Center, and Contact
-Support menus.
+Support menus, plus My Claims, Notifications, Start a Claim, Verification,
+Settings, Fund Transfer, Withdraw, Pay Bill, DPS, and FDR.
 
 ## Run locally
 
