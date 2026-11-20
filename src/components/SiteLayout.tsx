@@ -69,15 +69,15 @@ function SiteHeader() {
               {item.label}
             </NavLink>
           ))}
-          <a className="mobile-login" href={portalUrl}>
+          <Link className="mobile-login" to={portalUrl} onClick={() => setMenuOpen(false)}>
             Login <ArrowRight size={16} />
-          </a>
+          </Link>
         </nav>
         <div className="header-actions">
-          <a className="login-link" href={portalUrl}>Login</a>
-          <a className="button button-primary header-cta" href={accountUrl}>
+          <Link className="login-link" to={portalUrl}>Login</Link>
+          <Link className="button button-primary header-cta" to={accountUrl}>
             Get started <ArrowRight size={16} />
-          </a>
+          </Link>
         </div>
         <button
           className="menu-toggle"
@@ -102,9 +102,9 @@ function Footer() {
             <span className="eyebrow">A clearer way forward</span>
             <h2>Let’s get your refund journey started.</h2>
           </div>
-          <a className="button button-light" href={accountUrl}>
+          <Link className="button button-light" to={accountUrl}>
             Create an account <ArrowRight size={17} />
-          </a>
+          </Link>
         </div>
       </div>
       <div className="footer-main container-site">
@@ -135,7 +135,7 @@ function Footer() {
         <div className="footer-column">
           <h3>Support</h3>
           <span>Every day, 07 am – 07 pm</span>
-          <a href={portalUrl}>Customer login <ArrowRight size={14} /></a>
+          <Link to={portalUrl}>Customer login <ArrowRight size={14} /></Link>
           <p>We’re here to help you find the right next step.</p>
         </div>
       </div>

@@ -22,6 +22,8 @@ npm run dev
 ```
 
 Run `npm run build` for a production build and `npm run lint` for lint checks.
+Vercel deployments use `vercel.json` to serve the React app for direct route
+loads such as `/login`, `/register`, and `/dashboard`.
 
 The supplied site images are in `public/assets`. The public website, login,
 registration, and dashboard share the same green-and-lime visual theme.

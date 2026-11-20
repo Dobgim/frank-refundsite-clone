@@ -135,9 +135,9 @@ export function HomePage() {
               processing and transaction management. Whatever you paid for,
               wherever you paid, if you’re owed money, we make sure you get it back.
             </p>
-            <a className="button button-primary" href={accountUrl}>
+            <Link className="button button-primary" to={accountUrl}>
               Get Started <ArrowRight size={17} />
-            </a>
+            </Link>
           </div>
           <div className="hero-visual">
             <div className="hero-photo">
@@ -236,7 +236,7 @@ export function HomePage() {
                 <span key={name}><Wallet size={16} /> {name}</span>
               ))}
             </div>
-            <a className="button button-dark" href={accountUrl}>Create Account <ArrowRight size={16} /></a>
+            <Link className="button button-dark" to={accountUrl}>Create Account <ArrowRight size={16} /></Link>
           </div>
         </div>
       </section>
@@ -374,7 +374,7 @@ function PlanCard({
       <h3>{title}</h3>
       <div className="plan-price">{price}<small> / per service</small></div>
       <ul>{features.map((feature) => <li key={feature}><span>✓</span>{feature}</li>)}</ul>
-      <a className={`button ${popular ? 'button-primary' : 'button-dark'}`} href={accountUrl}>Select Plan <ArrowRight size={16} /></a>
+      <Link className={`button ${popular ? 'button-primary' : 'button-dark'}`} to={accountUrl}>Select Plan <ArrowRight size={16} /></Link>
     </article>
   )
 }

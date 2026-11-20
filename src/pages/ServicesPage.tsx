@@ -12,6 +12,7 @@ import {
   Smartphone,
   Wallet,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { PageHero } from '../components/PageHero'
 import { SectionHeading } from '../components/SectionHeading'
 import { accountUrl } from '../components/SiteLayout'
@@ -41,7 +42,7 @@ export function ServicesPage() {
         title="Services"
         description="We provide clear information about our services and how they can help individuals and businesses find a path forward."
       >
-        <a className="button button-primary" href={accountUrl}>Request a Service <ArrowRight size={16} /></a>
+        <Link className="button button-primary" to={accountUrl}>Request a Service <ArrowRight size={16} /></Link>
       </PageHero>
       <section className="section section-soft">
         <div className="container-site service-intro">
@@ -53,7 +54,7 @@ export function ServicesPage() {
         <div className="container-site service-grid">
           {serviceFeatures.map(({ icon: Icon, title, text }, index) => (
             <article className={`service-card ${index === 0 ? 'service-card-featured' : ''}`} key={title}>
-              <span className="service-icon"><Icon size={23} /></span><h3>{title}</h3><p>{text}</p><a href={accountUrl} aria-label={`Request ${title}`}><ArrowRight size={18} /></a>
+              <span className="service-icon"><Icon size={23} /></span><h3>{title}</h3><p>{text}</p><Link to={accountUrl} aria-label={`Request ${title}`}><ArrowRight size={18} /></Link>
             </article>
           ))}
         </div>
@@ -61,7 +62,7 @@ export function ServicesPage() {
       <section className="service-cta-band">
         <div className="container-site service-cta-content">
           <div><span className="eyebrow">Find out more about our service</span><h2>Let’s talk about what you need.</h2><p>Consult with our team and get clear information about the available next steps.</p></div>
-          <a className="button button-light" href={accountUrl}>Request Service <ArrowRight size={17} /></a>
+          <Link className="button button-light" to={accountUrl}>Request Service <ArrowRight size={17} /></Link>
         </div>
       </section>
       <section className="section">

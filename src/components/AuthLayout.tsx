@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import '../auth.css'
 
 const benefits = [
@@ -25,12 +26,12 @@ export function AuthLayout({
         <span className="auth-circle auth-circle-large" />
         <span className="auth-circle auth-circle-small" />
         <div className="auth-brand-content">
-          <a className="auth-logo" href="/" aria-label="Whitehill Bank home">
+          <Link className="auth-logo" to="/" aria-label="Whitehill Bank home">
             <img
               src="/assets/Screenshot_2025-08-09_121543-removebg-preview.png"
               alt="Whitehill"
             />
-          </a>
+          </Link>
           <h1>Start Banking with Us</h1>
           <p className="auth-brand-description">
             Create your Whitehill Settlement account in just a few steps and

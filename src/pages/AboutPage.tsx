@@ -26,7 +26,7 @@ export function AboutPage() {
         title="About Whitehill"
         description="A trusted refund processing institution built around transparency, compliance, and customer-first banking."
       >
-        <a className="button button-primary" href={accountUrl}>Let’s work together <ArrowRight size={16} /></a>
+        <Link className="button button-primary" to={accountUrl}>Let’s work together <ArrowRight size={16} /></Link>
       </PageHero>
       <section className="section section-soft">
         <div className="container-site about-intro">
