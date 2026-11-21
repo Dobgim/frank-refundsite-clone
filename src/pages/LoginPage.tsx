@@ -72,7 +72,6 @@ export function LoginPage() {
           <button className="auth-next-button login-submit" type="submit" disabled={!isConfigured || isSubmitting}>{isSubmitting ? 'Signing in…' : 'Sign In'} <span aria-hidden="true">→</span></button>
           {!isConfigured && <div className="auth-notice" role="alert">Supabase is not configured. Set the required environment variables to enable sign-in.</div>}
           {notice && <div className="auth-notice" role="status">{notice}</div>}
-          <p className="auth-privacy-note">Your password is securely handled by Supabase Auth and is never stored in this website’s database.</p>
         </form>
         <div className="auth-card-footer">
           Don’t have an account? <Link to="/register">Create one</Link>
