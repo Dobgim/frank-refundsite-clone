@@ -27,8 +27,9 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { currencyOptions, formatCurrency, isCurrency, type Currency } from '../currency'
+import { useAuth } from '../auth/useAuth'
 import '../dashboard.css'
 
 type DashboardTab =
@@ -78,14 +79,22 @@ const quickActions: { label: string; icon: LucideIcon; tab: DashboardTab }[] = [
 ]
 
 export function DashboardPage() {
+  const { isAdmin, session, signOut } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<DashboardTab>('Overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [signOutError, setSignOutError] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedCurrency = searchParams.get('currency')
   const currency = isCurrency(requestedCurrency) ? requestedCurrency : 'USD'
+  const email = session?.user.email ?? ''
+  const firstName = String(session?.user.user_metadata.first_name ?? email.split('@')[0] ?? 'Member')
+  const fullName = [firstName, session?.user.user_metadata.last_name].filter(Boolean).join(' ')
+  const initials = fullName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  const country = String(session?.user.user_metadata.country ?? '—')
 
   useEffect(() => {
-    document.title = `${activeTab} - Whitehill Demo Dashboard`
+    document.title = `${activeTab} - Whitehill Dashboard`
     window.scrollTo(0, 0)
   }, [activeTab])
 
@@ -99,6 +108,15 @@ export function DashboardPage() {
       currentParams.set('currency', nextCurrency)
       return currentParams
     }, { replace: true })
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : 'Unable to sign out.')
+    }
   }
 
   return (
@@ -126,11 +144,12 @@ export function DashboardPage() {
         </nav>
         <div className="dashboard-sidebar-bottom">
           <div className="dashboard-user-card">
-            <span className="dashboard-avatar">JD</span>
-            <span className="dashboard-user-name"><strong>John Doe</strong><small>demo@example.com</small></span>
-            <span className="dashboard-user-role">USER</span>
+            <span className="dashboard-avatar">{initials || 'U'}</span>
+            <span className="dashboard-user-name"><strong>{fullName}</strong><small>{email}</small></span>
+            <span className="dashboard-user-role">{isAdmin ? 'ADMIN' : 'USER'}</span>
           </div>
-          <Link className="dashboard-signout" to="/login"><LogOut size={15} /> Sign out</Link>
+          {isAdmin && <Link className="dashboard-signout" to="/admin"><ShieldCheck size={15} /> Admin dashboard</Link>}
+          <button className="dashboard-signout" type="button" onClick={() => void handleSignOut()}><LogOut size={15} /> Sign out</button>
         </div>
       </aside>
 
@@ -138,16 +157,16 @@ export function DashboardPage() {
         <div className="dashboard-mobile-bar">
           <button type="button" aria-label="Open dashboard menu" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <span>Whitehill <b>Bank</b></span>
-          <Link to="/login" aria-label="Sign out"><LogOut size={18} /></Link>
+          <button type="button" aria-label="Sign out" onClick={() => void handleSignOut()}><LogOut size={18} /></button>
         </div>
         <div className="dashboard-content">
           <header className="dashboard-page-header">
             <div>
-              <p className="dashboard-demo-tag"><span /> DEMO ACCOUNT</p>
-              <h1>{activeTab === 'Overview' ? 'Welcome back, John' : activeTab}</h1>
+              <p className="dashboard-demo-tag"><span /> MEMBER ACCOUNT</p>
+              <h1>{activeTab === 'Overview' ? `Welcome back, ${firstName}` : activeTab}</h1>
               <p className="dashboard-subtitle">
                 {activeTab === 'Overview'
-                  ? 'A snapshot of everything currently open on your account.'
+                  ? 'Your account dashboard and membership information.'
                   : `Manage your ${activeTab.toLowerCase()} and see your latest account information.`}
               </p>
             </div>
@@ -158,11 +177,12 @@ export function DashboardPage() {
 
           <div className="dashboard-demo-notice">
             <ShieldAlert size={20} />
-            <div><strong>Sample dashboard</strong><p>Demo data only. Claims, transfers, loans, and account actions are not submitted or processed.</p></div>
+            <div><strong>Financial features are not connected</strong><p>Sign-in and your account are live. Claims, balances, transfers, loans, and account actions shown here are sample UI and are not submitted or processed.</p></div>
           </div>
+          {signOutError && <p className="dashboard-form-notice" role="alert">{signOutError}</p>}
 
           {activeTab === 'Overview' ? (
-            <Overview onSelect={chooseTab} currency={currency} />
+            <Overview onSelect={chooseTab} currency={currency} name={fullName} email={email} country={country} createdAt={session?.user.created_at ?? ''} />
           ) : activeTab === 'My Claims' ? (
             <ClaimsPanel onStart={() => chooseTab('Start a Claim')} />
           ) : activeTab === 'Notifications' ? (
@@ -192,7 +212,7 @@ export function DashboardPage() {
   )
 }
 
-function Overview({ onSelect, currency }: { onSelect: (tab: DashboardTab) => void; currency: Currency }) {
+function Overview({ onSelect, currency, name, email, country, createdAt }: { onSelect: (tab: DashboardTab) => void; currency: Currency; name: string; email: string; country: string; createdAt: string }) {
   return (
     <>
       <section className="dashboard-overview-grid">
@@ -201,7 +221,7 @@ function Overview({ onSelect, currency }: { onSelect: (tab: DashboardTab) => voi
           <div className="bank-card-caption">AVAILABLE BALANCE</div>
           <div className="bank-card-balance">{formatCurrency(0, currency)}</div>
           <div className="bank-card-number">WH 40&nbsp; 0010&nbsp; 0023</div>
-          <div className="bank-card-bottom"><span>John Doe</span><small>DEMO ACCOUNT</small></div>
+          <div className="bank-card-bottom"><span>{name}</span><small>DEMO ACCOUNT</small></div>
         </div>
         <div className="dashboard-quick-grid">
           {quickActions.map(({ label, icon: Icon, tab }) => (
@@ -214,8 +234,8 @@ function Overview({ onSelect, currency }: { onSelect: (tab: DashboardTab) => voi
 
       <section className="dashboard-account-status">
         <span className="status-icon"><ShieldCheck size={19} /></span>
-        <div><strong>Account status: <b>Demo</b></strong><span>demo@example.com · United Kingdom</span></div>
-        <span className="member-date">Sample member · Oct 31, 2026</span>
+        <div><strong>Account status: <b>Active</b></strong><span>{email} · {country}</span></div>
+        <span className="member-date">Member since {createdAt ? new Date(createdAt).toLocaleDateString() : '—'}</span>
       </section>
 
       <section className="dashboard-metrics">

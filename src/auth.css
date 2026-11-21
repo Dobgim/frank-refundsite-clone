@@ -379,6 +379,21 @@
   line-height: 1.55;
 }
 
+.auth-config-error {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  color: #a12e2e;
+  font-size: 14px;
+  text-align: center;
+}
+
+.auth-next-button:disabled {
+  cursor: not-allowed;
+  opacity: .65;
+}
+
 .auth-demo-link {
   display: inline-flex;
   margin-top: 6px;
