@@ -27,7 +27,8 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
+import { currencyOptions, formatCurrency, isCurrency, type Currency } from '../currency'
 import '../dashboard.css'
 
 type DashboardTab =
@@ -79,6 +80,9 @@ const quickActions: { label: string; icon: LucideIcon; tab: DashboardTab }[] = [
 export function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('Overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedCurrency = searchParams.get('currency')
+  const currency = isCurrency(requestedCurrency) ? requestedCurrency : 'USD'
 
   useEffect(() => {
     document.title = `${activeTab} - Whitehill Demo Dashboard`
@@ -88,6 +92,13 @@ export function DashboardPage() {
   function chooseTab(tab: DashboardTab) {
     setActiveTab(tab)
     setSidebarOpen(false)
+  }
+
+  function chooseCurrency(nextCurrency: Currency) {
+    setSearchParams((currentParams) => {
+      currentParams.set('currency', nextCurrency)
+      return currentParams
+    }, { replace: true })
   }
 
   return (
@@ -151,21 +162,21 @@ export function DashboardPage() {
           </div>
 
           {activeTab === 'Overview' ? (
-            <Overview onSelect={chooseTab} />
+            <Overview onSelect={chooseTab} currency={currency} />
           ) : activeTab === 'My Claims' ? (
             <ClaimsPanel onStart={() => chooseTab('Start a Claim')} />
           ) : activeTab === 'Notifications' ? (
             <NotificationsPanel />
           ) : activeTab === 'Start a Claim' ? (
-            <DemoActionPanel key={activeTab} title={activeTab} />
+            <DemoActionPanel key={activeTab} title={activeTab} currency={currency} />
           ) : activeTab === 'Verification' ? (
             <VerificationPanel />
           ) : activeTab === 'Settings' ? (
-            <SettingsPanel />
+            <SettingsPanel currency={currency} onCurrencyChange={chooseCurrency} />
           ) : activeTab === 'Fund Transfer' || activeTab === 'Withdraw' || activeTab === 'Pay Bill' || activeTab === 'DPS' || activeTab === 'FDR' ? (
-            <DemoActionPanel key={activeTab} title={activeTab} />
+            <DemoActionPanel key={activeTab} title={activeTab} currency={currency} />
           ) : activeTab === 'Loan' ? (
-            <LoanPanel />
+            <LoanPanel currency={currency} />
           ) : activeTab === 'Transactions' ? (
             <TransactionsPanel />
           ) : activeTab === 'Track a Case' ? (
@@ -181,14 +192,14 @@ export function DashboardPage() {
   )
 }
 
-function Overview({ onSelect }: { onSelect: (tab: DashboardTab) => void }) {
+function Overview({ onSelect, currency }: { onSelect: (tab: DashboardTab) => void; currency: Currency }) {
   return (
     <>
       <section className="dashboard-overview-grid">
         <div className="dashboard-bank-card">
           <div className="bank-card-top"><span className="chip"><i /><i /><i /><i /></span><span className="bank-card-brand"><Landmark size={17} /> Whitehill</span></div>
           <div className="bank-card-caption">AVAILABLE BALANCE</div>
-          <div className="bank-card-balance">$0.00</div>
+          <div className="bank-card-balance">{formatCurrency(0, currency)}</div>
           <div className="bank-card-number">WH 40&nbsp; 0010&nbsp; 0023</div>
           <div className="bank-card-bottom"><span>John Doe</span><small>DEMO ACCOUNT</small></div>
         </div>
@@ -211,7 +222,7 @@ function Overview({ onSelect }: { onSelect: (tab: DashboardTab) => void }) {
         <MetricCard title="Active cases" value="0" note="In the pipeline right now" icon={FolderOpen} tone="violet" />
         <MetricCard title="Awaiting your input" value="0" note="Documents requested" icon={Hourglass} tone="amber" />
         <MetricCard title="Completed" value="0" note="Resolved or closed" icon={CircleCheck} tone="green" />
-        <MetricCard title="Recovered" value="$0.00" note="Across resolved cases" icon={ClipboardList} tone="slate" />
+        <MetricCard title="Recovered" value={formatCurrency(0, currency)} note="Across resolved cases" icon={ClipboardList} tone="slate" />
       </section>
 
       <section className="dashboard-lower-grid">
@@ -298,7 +309,17 @@ function VerificationPanel() {
   )
 }
 
-function SettingsPanel() {
+function SettingsPanel({
+  currency,
+  onCurrencyChange,
+}: {
+  currency: Currency
+  onCurrencyChange: (currency: Currency) => void
+}) {
+  function handleCurrencyChange(value: string) {
+    if (isCurrency(value)) onCurrencyChange(value)
+  }
+
   return (
     <section className="dashboard-panel dashboard-page-panel">
       <div className="dashboard-panel-heading"><div><h2>Profile settings</h2><p>Sample profile details for the visual dashboard.</p></div></div>
@@ -307,8 +328,14 @@ function SettingsPanel() {
         <div><span>Email address</span><strong>demo@example.com</strong></div>
         <div><span>Country</span><strong>United Kingdom</strong></div>
         <div><span>Account type</span><strong>Personal account</strong></div>
+        <label className="dashboard-currency-setting">
+          <span>Preferred currency</span>
+          <select value={currency} onChange={(event) => handleCurrencyChange(event.currentTarget.value)}>
+            {currencyOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
       </div>
-      <p className="dashboard-muted-note">Profile editing is disabled because this sample account is not connected to a backend.</p>
+      <p className="dashboard-muted-note">Currency changes update the demo display only. No account data or real exchange rates are connected.</p>
     </section>
   )
 }
@@ -322,7 +349,7 @@ function CasesPanel({ onSupport }: { onSupport: () => void }) {
   )
 }
 
-function LoanPanel() {
+function LoanPanel({ currency }: { currency: Currency }) {
   const [notice, setNotice] = useState('')
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -336,7 +363,7 @@ function LoanPanel() {
       <form className="dashboard-request-form" onSubmit={handleSubmit}>
         <label>Loan type<select defaultValue="" required><option value="" disabled>Select an option</option><option>Personal loan inquiry</option><option>Business loan inquiry</option></select></label>
         <div className="dashboard-form-row">
-          <label>Requested amount<input inputMode="decimal" placeholder="Example only" required /></label>
+          <label>Requested amount ({currency})<input inputMode="decimal" placeholder="0.00" required /></label>
           <label>Preferred term<select defaultValue="" required><option value="" disabled>Select a term</option><option>12 months</option><option>24 months</option><option>36 months</option></select></label>
         </div>
         <label>Purpose<textarea rows={4} placeholder="Briefly describe your inquiry" required /></label>
@@ -383,7 +410,7 @@ function TransactionsPanel() {
   )
 }
 
-function DemoActionPanel({ title }: { title: string }) {
+function DemoActionPanel({ title, currency }: { title: string; currency: Currency }) {
   const [notice, setNotice] = useState('')
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -404,7 +431,7 @@ function DemoActionPanel({ title }: { title: string }) {
         </label>
         <div className="dashboard-form-row">
           <label>Reference or recipient<input placeholder="Example only" /></label>
-          <label>Amount (optional)<input inputMode="decimal" placeholder="$0.00" /></label>
+          <label>Amount (optional)<input inputMode="decimal" placeholder={formatCurrency(0, currency)} /></label>
         </div>
         <label>Details<textarea rows={4} placeholder="Add a short description for this sample request" required /></label>
         <button className="dashboard-primary-button" type="submit">Preview request <ArrowRight size={15} /></button>

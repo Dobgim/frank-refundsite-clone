@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
+import { currencyOptions, isCurrency, type Currency } from '../currency'
 
 const steps = ['Personal Info', 'Contact Details', 'Account Setup', 'Security']
 
@@ -17,6 +18,7 @@ export function RegisterPage() {
   const [step, setStep] = useState(0)
   const [notice, setNotice] = useState('')
   const [showDashboardLink, setShowDashboardLink] = useState(false)
+  const [preferredCurrency, setPreferredCurrency] = useState<Currency>('USD')
 
   function handleNext(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -31,7 +33,7 @@ export function RegisterPage() {
       setNotice('The passwords do not match. Please try again.')
       return
     }
-    setNotice('Registration preview only. Your information has not been sent or saved.')
+    setNotice('Registration preview only. Personal information has not been sent or saved; your selected currency will be used in the sample dashboard.')
     setShowDashboardLink(true)
   }
 
@@ -74,7 +76,7 @@ export function RegisterPage() {
 
           {step === 0 && <PersonalInfoFields />}
           {step === 1 && <ContactFields />}
-          {step === 2 && <AccountFields />}
+          {step === 2 && <AccountFields preferredCurrency={preferredCurrency} onCurrencyChange={setPreferredCurrency} />}
           {step === 3 && <SecurityFields />}
 
           <div className="auth-form-actions">
@@ -88,7 +90,7 @@ export function RegisterPage() {
               {step === steps.length - 1 ? <Check size={16} /> : <ArrowRight size={16} />}
             </button>
           </div>
-          {notice && <div className="auth-notice" role="status"><p>{notice}</p>{showDashboardLink && <Link className="auth-demo-link" to="/dashboard">Open sample dashboard</Link>}</div>}
+          {notice && <div className="auth-notice" role="status"><p>{notice}</p>{showDashboardLink && <Link className="auth-demo-link" to={`/dashboard?currency=${preferredCurrency}`}>Open sample dashboard in {preferredCurrency}</Link>}</div>}
         </form>
 
         <div className="auth-card-footer">
@@ -143,7 +145,13 @@ function ContactFields() {
   )
 }
 
-function AccountFields() {
+function AccountFields({
+  preferredCurrency,
+  onCurrencyChange,
+}: {
+  preferredCurrency: Currency
+  onCurrencyChange: (currency: Currency) => void
+}) {
   return (
     <div className="auth-fields-grid">
       <label className="auth-field">Account Type *
@@ -156,11 +164,16 @@ function AccountFields() {
         </select>
       </label>
       <label className="auth-field">Preferred Currency *
-        <select name="currency" defaultValue="USD" required>
-          <option value="USD">USD - US Dollar</option>
-          <option value="EUR">EUR - Euro</option>
-          <option value="GBP">GBP - British Pound</option>
-          <option value="CAD">CAD - Canadian Dollar</option>
+        <select
+          name="currency"
+          value={preferredCurrency}
+          onChange={(event) => {
+            const value = event.currentTarget.value
+            if (isCurrency(value)) onCurrencyChange(value)
+          }}
+          required
+        >
+          {currencyOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
         </select>
       </label>
       <label className="auth-field auth-field-full">How will you primarily use your account?

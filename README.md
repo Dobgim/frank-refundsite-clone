@@ -30,3 +30,5 @@ registration, and dashboard share the same green-and-lime visual theme.
 Login, registration, contact, and loan forms are UI-only previews; they do not
 send or store submitted information. Dashboard data is synthetic, and no
 backend or financial actions are connected.
+The signup currency preference carries into the sample dashboard display;
+changing it there only changes the demo currency format, not a real balance.
