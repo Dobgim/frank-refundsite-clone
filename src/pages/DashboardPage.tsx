@@ -1,15 +1,13 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   ArrowRight,
   Banknote,
   Bell,
-  CheckCircle,
   ChevronRight,
   CircleCheck,
   ClipboardList,
   CreditCard,
   FilePlus2,
-  FileText,
   FolderOpen,
   Headset,
   Hourglass,
@@ -30,7 +28,13 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { currencyOptions, formatCurrency, isCurrency, type Currency } from '../currency'
 import { useAuth } from '../auth/useAuth'
+import { CaseRequestForm } from '../components/CaseRequestForm'
+import { getSupabase } from '../lib/supabase'
+import type { Database } from '../lib/database.types'
+import { requestStatusLabels, requestTypeLabels } from '../lib/cases'
 import '../dashboard.css'
+
+type CaseRequest = Database['public']['Tables']['case_requests']['Row']
 
 type DashboardTab =
   | 'Overview'
@@ -84,6 +88,9 @@ export function DashboardPage() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('Overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [signOutError, setSignOutError] = useState('')
+  const [caseRequests, setCaseRequests] = useState<CaseRequest[]>([])
+  const [caseError, setCaseError] = useState('')
+  const [isLoadingCases, setIsLoadingCases] = useState(true)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedCurrency = searchParams.get('currency')
   const currency = isCurrency(requestedCurrency) ? requestedCurrency : 'USD'
@@ -92,6 +99,35 @@ export function DashboardPage() {
   const fullName = [firstName, session?.user.user_metadata.last_name].filter(Boolean).join(' ')
   const initials = fullName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
   const country = String(session?.user.user_metadata.country ?? '—')
+  const userId = session?.user.id
+
+  const loadCaseRequests = useCallback(async () => {
+    if (!userId) {
+      setCaseRequests([])
+      setIsLoadingCases(false)
+      return
+    }
+
+    setIsLoadingCases(true)
+    try {
+      const { data, error } = await getSupabase()
+        .from('case_requests')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setCaseRequests(data)
+      setCaseError('')
+    } catch (error) {
+      setCaseError(error instanceof Error ? error.message : 'Unable to load your requests.')
+    } finally {
+      setIsLoadingCases(false)
+    }
+  }, [userId])
+
+  useEffect(() => {
+    void loadCaseRequests()
+  }, [loadCaseRequests])
 
   useEffect(() => {
     document.title = `${activeTab} - Whitehill Dashboard`
@@ -177,34 +213,36 @@ export function DashboardPage() {
 
           <div className="dashboard-demo-notice">
             <ShieldAlert size={20} />
-            <div><strong>Financial features are not connected</strong><p>Sign-in and your account are live. Claims, balances, transfers, loans, and account actions shown here are sample UI and are not submitted or processed.</p></div>
+            <div><strong>Requests are for review only</strong><p>Submitted requests and supporting documents are private and visible to you and authorized administrators. No loan, withdrawal, transfer, or balance change is executed by this site.</p></div>
           </div>
           {signOutError && <p className="dashboard-form-notice" role="alert">{signOutError}</p>}
 
           {activeTab === 'Overview' ? (
-            <Overview onSelect={chooseTab} currency={currency} name={fullName} email={email} country={country} createdAt={session?.user.created_at ?? ''} />
+            <Overview onSelect={chooseTab} currency={currency} name={fullName} email={email} country={country} createdAt={session?.user.created_at ?? ''} requests={caseRequests} isLoading={isLoadingCases} requestError={caseError} />
           ) : activeTab === 'My Claims' ? (
-            <ClaimsPanel onStart={() => chooseTab('Start a Claim')} />
+            <ClaimsPanel onStart={() => chooseTab('Start a Claim')} requests={caseRequests.filter((request) => request.request_type === 'claim')} isLoading={isLoadingCases} error={caseError} />
           ) : activeTab === 'Notifications' ? (
             <NotificationsPanel />
           ) : activeTab === 'Start a Claim' ? (
-            <DemoActionPanel key={activeTab} title={activeTab} currency={currency} />
+            <CaseRequestForm key={activeTab} requestType="claim" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
           ) : activeTab === 'Verification' ? (
-            <VerificationPanel />
+            <CaseRequestForm key={activeTab} requestType="verification" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
           ) : activeTab === 'Settings' ? (
             <SettingsPanel currency={currency} onCurrencyChange={chooseCurrency} />
-          ) : activeTab === 'Fund Transfer' || activeTab === 'Withdraw' || activeTab === 'Pay Bill' || activeTab === 'DPS' || activeTab === 'FDR' ? (
+          ) : activeTab === 'Withdraw' ? (
+            <CaseRequestForm key={activeTab} requestType="withdrawal" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
+          ) : activeTab === 'Fund Transfer' || activeTab === 'Pay Bill' || activeTab === 'DPS' || activeTab === 'FDR' ? (
             <DemoActionPanel key={activeTab} title={activeTab} currency={currency} />
           ) : activeTab === 'Loan' ? (
-            <LoanPanel currency={currency} />
+            <CaseRequestForm key={activeTab} requestType="loan" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
           ) : activeTab === 'Transactions' ? (
             <TransactionsPanel />
           ) : activeTab === 'Track a Case' ? (
-            <CasesPanel onSupport={() => chooseTab('Contact Support')} />
+            <CasesPanel onSupport={() => chooseTab('Contact Support')} requests={caseRequests} isLoading={isLoadingCases} error={caseError} />
           ) : activeTab === 'Help Center' ? (
             <HelpCenterPanel onContact={() => chooseTab('Contact Support')} />
           ) : (
-            <ContactSupportPanel />
+            <CaseRequestForm key={activeTab} requestType="support" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
           )}
         </div>
       </main>
@@ -212,7 +250,31 @@ export function DashboardPage() {
   )
 }
 
-function Overview({ onSelect, currency, name, email, country, createdAt }: { onSelect: (tab: DashboardTab) => void; currency: Currency; name: string; email: string; country: string; createdAt: string }) {
+function Overview({
+  onSelect,
+  currency,
+  name,
+  email,
+  country,
+  createdAt,
+  requests,
+  isLoading,
+  requestError,
+}: {
+  onSelect: (tab: DashboardTab) => void
+  currency: Currency
+  name: string
+  email: string
+  country: string
+  createdAt: string
+  requests: CaseRequest[]
+  isLoading: boolean
+  requestError: string
+}) {
+  const activeRequests = requests.filter((request) => !['declined', 'resolved'].includes(request.status)).length
+  const waitingForUser = requests.filter((request) => request.status === 'needs_information').length
+  const resolvedRequests = requests.filter((request) => request.status === 'resolved' || request.status === 'declined').length
+
   return (
     <>
       <section className="dashboard-overview-grid">
@@ -239,16 +301,16 @@ function Overview({ onSelect, currency, name, email, country, createdAt }: { onS
       </section>
 
       <section className="dashboard-metrics">
-        <MetricCard title="Active cases" value="0" note="In the pipeline right now" icon={FolderOpen} tone="violet" />
-        <MetricCard title="Awaiting your input" value="0" note="Documents requested" icon={Hourglass} tone="amber" />
-        <MetricCard title="Completed" value="0" note="Resolved or closed" icon={CircleCheck} tone="green" />
-        <MetricCard title="Recovered" value={formatCurrency(0, currency)} note="Across resolved cases" icon={ClipboardList} tone="slate" />
+        <MetricCard title="Active requests" value={isLoading ? '…' : String(activeRequests)} note="Submitted for review" icon={FolderOpen} tone="violet" />
+        <MetricCard title="Awaiting your input" value={isLoading ? '…' : String(waitingForUser)} note="More information requested" icon={Hourglass} tone="amber" />
+        <MetricCard title="Completed" value={isLoading ? '…' : String(resolvedRequests)} note="Resolved or declined" icon={CircleCheck} tone="green" />
+        <MetricCard title="Requests submitted" value={isLoading ? '…' : String(requests.length)} note={`Displayed in ${currency}`} icon={ClipboardList} tone="slate" />
       </section>
 
       <section className="dashboard-lower-grid">
         <div className="dashboard-panel">
-          <div className="dashboard-panel-heading"><div><h2>Recent activity</h2><p>Your latest account updates</p></div><button type="button" onClick={() => onSelect('Transactions')}>View all <ArrowRight size={14} /></button></div>
-          <div className="dashboard-empty-state"><span><FileText size={20} /></span><strong>No recent activity</strong><p>New updates will appear here in your demo dashboard.</p></div>
+          <div className="dashboard-panel-heading"><div><h2>Recent requests</h2><p>Your latest submissions and status</p></div><button type="button" onClick={() => onSelect('Track a Case')}>View all <ArrowRight size={14} /></button></div>
+          <CaseRequestList requests={requests.slice(0, 3)} isLoading={isLoading} error={requestError} />
         </div>
         <div className="dashboard-panel">
           <div className="dashboard-panel-heading"><div><h2>Need a hand?</h2><p>We can help you understand what to do next.</p></div></div>
@@ -282,19 +344,53 @@ function MetricCard({
   )
 }
 
-function ClaimsPanel({ onStart }: { onStart: () => void }) {
+function CaseRequestList({ requests, isLoading, error }: { requests: CaseRequest[]; isLoading: boolean; error: string }) {
+  if (isLoading) return <p className="dashboard-muted-note">Loading your requests…</p>
+  if (error) return <p className="dashboard-form-notice" role="alert">{error}</p>
+  if (requests.length === 0) {
+    return (
+      <div className="dashboard-empty-state spacious">
+        <span><FolderOpen size={22} /></span>
+        <strong>No requests yet</strong>
+        <p>Requests you submit for staff review will appear here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="member-request-list">
+      {requests.map((request) => {
+        const amount = request.requested_amount && request.currency && isCurrency(request.currency)
+          ? formatCurrency(request.requested_amount, request.currency)
+          : ''
+        return (
+          <article className="member-request-item" key={request.id}>
+            <div className="member-request-main">
+              <span className="member-request-type">{requestTypeLabels[request.request_type]}</span>
+              <strong>{request.subject}</strong>
+              <p>{request.details}</p>
+              {request.staff_message && <p className="member-staff-message"><b>Team update:</b> {request.staff_message}</p>}
+              <small>Reference {request.id.slice(0, 8).toUpperCase()} · {new Date(request.created_at).toLocaleDateString()}</small>
+            </div>
+            <div className="member-request-meta">
+              {amount && <strong>{amount}</strong>}
+              <span className={`case-status status-${request.status.replace('_', '-')}`}>{requestStatusLabels[request.status]}</span>
+            </div>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
+function ClaimsPanel({ onStart, requests, isLoading, error }: { onStart: () => void; requests: CaseRequest[]; isLoading: boolean; error: string }) {
   return (
     <section className="dashboard-panel dashboard-page-panel">
       <div className="dashboard-panel-heading">
         <div><h2>My claims</h2><p>Track claim requests and their latest updates.</p></div>
         <button className="dashboard-primary-button" type="button" onClick={onStart}><FilePlus2 size={15} /> Start a claim</button>
       </div>
-      <div className="dashboard-empty-state spacious">
-        <span><FolderOpen size={22} /></span>
-        <strong>No demo claims yet</strong>
-        <p>Start a sample request to see how the claim flow is organized.</p>
-        <button className="dashboard-outline-button" type="button" onClick={onStart}>Create sample claim</button>
-      </div>
+      <CaseRequestList requests={requests} isLoading={isLoading} error={error} />
     </section>
   )
 }
@@ -305,26 +401,12 @@ function NotificationsPanel() {
       <div className="dashboard-panel-heading"><div><h2>Notifications</h2><p>Messages about this sample account.</p></div></div>
       <div className="dashboard-notice-item">
         <span><Bell size={17} /></span>
-        <div><strong>Welcome to your sample dashboard</strong><p>This dashboard uses example information only. No account data is connected.</p></div>
+        <div><strong>Welcome to your dashboard</strong><p>Requests you submit for review are available under Track a Case.</p></div>
       </div>
       <div className="dashboard-notice-item">
         <span><ShieldAlert size={17} /></span>
-        <div><strong>Verification center</strong><p>Identity verification is not available in this local demo.</p></div>
+        <div><strong>Keep documents private</strong><p>Only upload the documents requested for your case. Never share passwords, PINs, or card security codes.</p></div>
       </div>
-    </section>
-  )
-}
-
-function VerificationPanel() {
-  return (
-    <section className="dashboard-panel dashboard-page-panel">
-      <div className="dashboard-panel-heading"><div><h2>Verification center</h2><p>Review the sample status of your account profile.</p></div></div>
-      <div className="dashboard-verification-card">
-        <ShieldAlert size={20} />
-        <div><strong>Verification is not connected</strong><p>This local preview does not collect identity documents or verify accounts.</p></div>
-      </div>
-      <div className="dashboard-verification-row"><CheckCircle size={18} /><div><strong>Email address</strong><p>Example only · Not verified</p></div><small>Demo</small></div>
-      <div className="dashboard-verification-row"><ShieldCheck size={18} /><div><strong>Identity documents</strong><p>File uploads are disabled in this preview.</p></div><small>Not started</small></div>
     </section>
   )
 }
@@ -360,36 +442,12 @@ function SettingsPanel({
   )
 }
 
-function CasesPanel({ onSupport }: { onSupport: () => void }) {
+function CasesPanel({ onSupport, requests, isLoading, error }: { onSupport: () => void; requests: CaseRequest[]; isLoading: boolean; error: string }) {
   return (
     <section className="dashboard-panel dashboard-page-panel">
       <div className="dashboard-panel-heading"><div><h2>Track a case</h2><p>Review the latest status of your case requests.</p></div></div>
-      <div className="dashboard-empty-state spacious"><span><FolderOpen size={22} /></span><strong>No demo cases yet</strong><p>Case tracking is not connected in this preview.</p><button className="dashboard-outline-button" type="button" onClick={onSupport}>Contact support</button></div>
-    </section>
-  )
-}
-
-function LoanPanel({ currency }: { currency: Currency }) {
-  const [notice, setNotice] = useState('')
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setNotice('Demo only — your loan inquiry was not sent or saved.')
-  }
-
-  return (
-    <section className="dashboard-panel dashboard-page-panel">
-      <div className="dashboard-panel-heading"><div><h2>Loan inquiry</h2><p>Preview the request form. No loan is approved or processed.</p></div></div>
-      <form className="dashboard-request-form" onSubmit={handleSubmit}>
-        <label>Loan type<select defaultValue="" required><option value="" disabled>Select an option</option><option>Personal loan inquiry</option><option>Business loan inquiry</option></select></label>
-        <div className="dashboard-form-row">
-          <label>Requested amount ({currency})<input inputMode="decimal" placeholder="0.00" required /></label>
-          <label>Preferred term<select defaultValue="" required><option value="" disabled>Select a term</option><option>12 months</option><option>24 months</option><option>36 months</option></select></label>
-        </div>
-        <label>Purpose<textarea rows={4} placeholder="Briefly describe your inquiry" required /></label>
-        <button className="dashboard-primary-button" type="submit">Preview loan inquiry <ArrowRight size={15} /></button>
-        {notice && <p className="dashboard-form-notice" role="status">{notice}</p>}
-      </form>
+      <CaseRequestList requests={requests} isLoading={isLoading} error={error} />
+      {!isLoading && <button className="dashboard-outline-button" type="button" onClick={onSupport}>Contact customer service</button>}
     </section>
   )
 }
@@ -399,24 +457,11 @@ function HelpCenterPanel({ onContact }: { onContact: () => void }) {
     <section className="dashboard-panel dashboard-page-panel">
       <div className="dashboard-panel-heading"><div><h2>Help center</h2><p>Quick answers for your sample account.</p></div></div>
       <div className="dashboard-help-topics">
-        <article><strong>How do I track a case?</strong><p>Choose “Track a Case” to view updates. Case data is not connected in this demo.</p></article>
-        <article><strong>Can I submit a loan request?</strong><p>The form is a visual preview only. Nothing is sent, saved, or approved.</p></article>
+        <article><strong>How do I track a case?</strong><p>Choose “Track a Case” to view requests and staff updates.</p></article>
+        <article><strong>Can I submit a loan request?</strong><p>Loan inquiries are recorded for staff review only; they are not offers, approvals, or disbursements.</p></article>
         <article><strong>Where can I see account activity?</strong><p>Open “Transactions” to review the sample activity state.</p></article>
       </div>
       <button className="dashboard-outline-button" type="button" onClick={onContact}>Contact support</button>
-    </section>
-  )
-}
-
-function ContactSupportPanel() {
-  return (
-    <section className="dashboard-panel dashboard-page-panel">
-      <div className="dashboard-panel-heading"><div><h2>Contact support</h2><p>Choose the support option that works for you.</p></div></div>
-      <div className="dashboard-support-card">
-        <span><Headset size={20} /></span>
-        <div><strong>Whitehill customer support</strong><p>Our team can help with questions about cases, transactions, and loan inquiries.</p></div>
-      </div>
-      <Link className="dashboard-primary-button dashboard-support-link" to="/contact/">Go to contact page <ArrowRight size={15} /></Link>
     </section>
   )
 }

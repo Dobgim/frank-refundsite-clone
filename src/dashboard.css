@@ -966,6 +966,114 @@
   justify-self: start;
 }
 
+.case-document-field small {
+  color: var(--dash-muted);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.case-file-input {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 9px;
+  border: 1px dashed #bdcbbf;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--green);
+  background: #f7faf6;
+}
+
+.case-file-input > span {
+  flex: 1;
+}
+
+.case-file-input input {
+  min-height: auto;
+  max-width: 230px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.member-request-list {
+  display: grid;
+}
+
+.member-request-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid var(--dash-line);
+  padding: 17px 0;
+}
+
+.member-request-main {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.member-request-type {
+  color: var(--dash-muted);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.member-request-main > strong {
+  font-size: 12px;
+}
+
+.member-request-main > p {
+  color: var(--dash-muted);
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.member-request-main > small {
+  color: var(--dash-muted);
+  font-size: 9px;
+}
+
+.member-staff-message {
+  border-left: 2px solid var(--green);
+  padding-left: 8px;
+  color: var(--dash-ink) !important;
+}
+
+.member-request-meta {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 7px;
+}
+
+.case-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid #dfe5df;
+  border-radius: 999px;
+  padding: 4px 9px;
+  color: #536157;
+  background: #f5f7f5;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-submitted { border-color: #ffe6ad; color: #9a6207; background: #fff8e6; }
+.status-under-review { border-color: #d9e0ed; color: #52627b; background: #eef2f8; }
+.status-needs-information { border-color: #ffd5c2; color: #a64e20; background: #fff2eb; }
+.status-approved { border-color: #bcefe4; color: #087c67; background: #e7faf5; }
+.status-declined { border-color: #f1c9c9; color: #a12e2e; background: #fff1f1; }
+.status-resolved { border-color: #bcefe4; color: #087c67; background: #e7faf5; }
+
 .dashboard-form-notice {
   border-left: 3px solid var(--green);
   padding: 9px 12px;
@@ -1151,5 +1259,22 @@
 
   .dashboard-form-row {
     grid-template-columns: 1fr;
+  }
+
+  .member-request-item {
+    flex-direction: column;
+  }
+
+  .member-request-meta {
+    justify-items: start;
+  }
+
+  .case-file-input {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .case-file-input input {
+    max-width: 100%;
   }
 }

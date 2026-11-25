@@ -10,7 +10,7 @@ React, TypeScript, Vite, and Tailwind CSS website with Supabase-backed authentic
 
 It also includes registration (`/register`), login (`/login`), password recovery
 (`/reset-password`), an authenticated member area (`/dashboard`), and a
-role-protected admin member list (`/admin`).
+role-protected admin review dashboard (`/admin`).
 
 ## Run locally
 
@@ -28,11 +28,13 @@ The supplied site images are in `public/assets`. Configure local settings in
 key, and site URL are client-side values; never put a service-role key or SMTP
 credentials in the website or commit `.env.local`.
 
-Before using registration, apply [`supabase/schema.sql`](./supabase/schema.sql)
-in the Supabase SQL Editor. It creates a profiles table, a user-profile trigger,
-and row-level security so members can read their own data and admins can read
-member profiles. Supabase Auth stores and verifies passwords; this app never
-stores password values in the profiles table. Set the Supabase Auth site URL to
+Before using registration or case submissions, apply
+[`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor. It
+creates profiles and case-request tables, a private document bucket, and
+row-level security so users can access only their own requests and files while
+authorized admins can review all submissions. Supabase Auth stores and verifies
+passwords; this app never stores password values in the profiles table. Set the
+Supabase Auth site URL to
 `https://www.whitehillesettlement.online` and add
 `https://www.whitehillesettlement.online/**` to its allowed redirect URLs. Add
 `http://localhost:5173/**` for local development. Set `VITE_SITE_URL` to the
@@ -74,6 +76,17 @@ redeploy. The sender and recipient are the business email; replies go to the
 submitter's address. SMTP credentials must not be added to GitHub or browser
 code.
 
+Member dashboard forms save claims, verification, loan, withdrawal, and support
+requests for staff review only; they do not authorize or execute financial
+transactions. Verification and supporting files are private PDF/JPG/PNG uploads
+limited to 10 MB per file and five files per request. A daily Vercel Cron job
+removes file objects and their metadata 30 days after a request is marked
+resolved or declined. To enable it, add `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, and a high-entropy `CRON_SECRET` in Vercel Project
+Settings → Environment Variables. These are server-only secrets. Never prefix
+the service-role key with `VITE_`, expose it to client code, or commit it. The
+case request records remain available after document cleanup.
+
 There are no default admin credentials in this repository. Register and confirm
 an account using an email address you control, then grant the `admin` role in
 the Supabase SQL Editor for that exact account email. That account uses the
@@ -83,15 +96,15 @@ password:
 ```sql
 update auth.users
 set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
-where email = 'admin@example.com';
+where email = 'info@whitehillesettlement.online';
 ```
 
-The user must sign out and back in to refresh the role claim. Admin authorization
-is checked from trusted `app_metadata`, and the profiles RLS policy independently
-enforces admin-only access to the member list. Do not assign admin roles through
-user-editable metadata.
+The administrator must sign out and back in to refresh the role claim. Admin
+authorization is checked from trusted `app_metadata`, and row-level security
+independently enforces admin-only access to member and case data. Do not assign
+admin roles through user-editable metadata.
 
-The website's financial flows and balance/activity content remain sample UI;
-no claims, transfers, loans, or banking actions are processed. The admin area
-only lists registered profiles and does not expose credentials or manage
-passwords.
+Balances, transfers, bills, savings, and deposits remain sample UI. Claims,
+verification, loan, withdrawal, and support forms store requests for review
+only; no loan decisions, transfers, withdrawals, or banking actions are
+executed. The admin area never exposes or manages account passwords.
