@@ -268,8 +268,10 @@ main { min-height: 50vh; }
 .contact-form input:focus, .contact-form textarea:focus { border-color: #75a18b; box-shadow: 0 0 0 3px #1b5b4812; }
 .contact-form input::placeholder, .contact-form textarea::placeholder { color: #a1aaa4; }
 .contact-form .button { justify-self: start; }
+.contact-form-honeypot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .form-disclaimer, .form-notice { color: #718078; font-size: 10px; line-height: 1.6; }
 .form-notice { border-left: 2px solid #8a9e80; padding-left: 11px; color: #4a5b4e; font-size: 11px; }
+.form-notice-error { border-color: #b42318; color: #b42318; }
 .contact-details { position: relative; overflow: hidden; color: white; border-color: #1c5b48; background: #1b5b48; }
 .contact-details-heading { position: relative; z-index: 1; margin-bottom: 29px; }
 .contact-details h2 { max-width: 360px; }
