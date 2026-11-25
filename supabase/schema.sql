@@ -36,7 +36,7 @@ create policy "Members can read own profile"
 drop policy if exists "Admins can read all profiles" on public.profiles;
 create policy "Admins can read all profiles"
   on public.profiles for select to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 drop policy if exists "Members can update own profile" on public.profiles;
 create policy "Members can update own profile"
@@ -135,7 +135,7 @@ create policy "Members can read own case requests"
 drop policy if exists "Admins can read all case requests" on public.case_requests;
 create policy "Admins can read all case requests"
   on public.case_requests for select to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 drop policy if exists "Members can submit own case requests" on public.case_requests;
 create policy "Members can submit own case requests"
@@ -155,8 +155,8 @@ create policy "Members can submit own case requests"
 drop policy if exists "Admins can update case requests" on public.case_requests;
 create policy "Admins can update case requests"
   on public.case_requests for update to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin')
+  with check (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 create or replace function public.update_case_request_timestamps()
 returns trigger
@@ -209,7 +209,7 @@ create policy "Members can read own case documents"
 drop policy if exists "Admins can read all case documents" on public.case_documents;
 create policy "Admins can read all case documents"
   on public.case_documents for select to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 drop policy if exists "Members can add documents to own requests" on public.case_documents;
 create policy "Members can add documents to own requests"
@@ -305,7 +305,7 @@ create policy "Admins can read case files"
   on storage.objects for select to authenticated
   using (
     bucket_id = 'case-documents'
-    and (select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    and ((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 drop policy if exists "Members can delete unlinked own case files" on storage.objects;
@@ -359,6 +359,8 @@ create unique index if not exists identity_verifications_one_pending_idx
   where status = 'pending';
 create index if not exists identity_verifications_user_created_idx
   on public.identity_verifications (user_id, created_at desc);
+create index if not exists identity_verifications_reviewed_by_idx
+  on public.identity_verifications (reviewed_by);
 create index if not exists identity_verifications_status_idx
   on public.identity_verifications (status, created_at desc);
 
@@ -378,7 +380,7 @@ create policy "Members can read own verification"
 drop policy if exists "Admins can read all verifications" on public.identity_verifications;
 create policy "Admins can read all verifications"
   on public.identity_verifications for select to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 drop policy if exists "Members can submit verification" on public.identity_verifications;
 create policy "Members can submit verification"
@@ -408,13 +410,13 @@ create policy "Members can submit verification"
 drop policy if exists "Admins can update verifications" on public.identity_verifications;
 create policy "Admins can update verifications"
   on public.identity_verifications for update to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
-  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin')
+  with check (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 drop policy if exists "Admins can delete verifications" on public.identity_verifications;
 create policy "Admins can delete verifications"
   on public.identity_verifications for delete to authenticated
-  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+  using (((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin');
 
 create or replace function public.stamp_identity_review()
 returns trigger
@@ -516,7 +518,7 @@ create policy "Admins can read verification files"
   on storage.objects for select to authenticated
   using (
     bucket_id = 'identity-verifications'
-    and (select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    and ((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 drop policy if exists "Admins can delete verification files" on storage.objects;
@@ -524,5 +526,58 @@ create policy "Admins can delete verification files"
   on storage.objects for delete to authenticated
   using (
     bucket_id = 'identity-verifications'
-    and (select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    and ((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin'
   );
+
+-- ============================================================
+-- Administrator account deletion
+-- ============================================================
+
+-- Admins remove a member's private files from storage first (see the delete
+-- policies above and below), then call this function to delete the account.
+-- Deleting the auth user cascades to profiles, case requests, case documents
+-- and identity verifications.
+create or replace function public.admin_delete_user(target_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(((select auth.jwt()) -> 'app_metadata' ->> 'role'), '') <> 'admin' then
+    raise exception 'Administrator access is required.' using errcode = '42501';
+  end if;
+  if target_user_id = (select auth.uid()) then
+    raise exception 'You cannot delete your own administrator account.' using errcode = '42501';
+  end if;
+  if exists (
+    select 1 from auth.users u
+    where u.id = target_user_id and u.raw_app_meta_data ->> 'role' = 'admin'
+  ) then
+    raise exception 'Administrator accounts cannot be deleted from the dashboard.' using errcode = '42501';
+  end if;
+
+  delete from auth.users where id = target_user_id;
+  if not found then
+    raise exception 'User not found.' using errcode = 'P0002';
+  end if;
+end;
+$$;
+
+revoke all on function public.admin_delete_user(uuid) from public, anon;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
+
+drop policy if exists "Admins can delete case files" on storage.objects;
+create policy "Admins can delete case files"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'case-documents'
+    and ((select auth.jwt()) -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+-- Trigger functions are never called directly; keep them off the REST API.
+revoke all on function public.handle_user_profile() from public, anon, authenticated;
+revoke all on function public.enforce_case_document_limit() from public, anon, authenticated;
+revoke all on function public.sync_profile_verification_status() from public, anon, authenticated;
+revoke all on function public.stamp_identity_review() from public, anon, authenticated;
+revoke all on function public.update_case_request_timestamps() from public, anon, authenticated;

@@ -3,20 +3,10 @@ import type { Session } from '@supabase/supabase-js'
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 
-/** Account emails are sent by our server function from the business mailbox, not by Supabase. */
-async function postAuthEmail(payload: Record<string, unknown>) {
-  const response = await fetch('/api/auth-email', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  if (response.ok) return
-  const result: unknown = await response.json().catch(() => null)
-  const message = typeof result === 'object' && result !== null && 'error' in result && typeof result.error === 'string'
-    ? result.error
-    : 'Something went wrong. Please try again.'
-  throw new Error(message)
-}
+// Account emails are sent by Supabase Auth through the project's custom SMTP
+// (info@whitehillesettlement.online). The email templates link to this site's
+// /auth/confirm and /reset-password pages, which verify the token hash.
+const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -55,17 +45,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data.user.app_metadata.role === 'admin' ? '/admin' : '/dashboard'
     },
     async signUp({ email, password, profile }) {
-      await postAuthEmail({ action: 'signup', email, password, profile })
+      const { error } = await getSupabase().auth.signUp({
+        email,
+        password,
+        options: { data: profile, emailRedirectTo: `${siteUrl}/login` },
+      })
+      if (error) throw error
     },
     async resendConfirmation(email) {
-      await postAuthEmail({ action: 'resend', email })
+      const { error } = await getSupabase().auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+        options: { emailRedirectTo: `${siteUrl}/login` },
+      })
+      if (error) throw error
     },
     async signOut() {
       const { error } = await getSupabase().auth.signOut()
       if (error) throw error
     },
     async requestPasswordReset(email) {
-      await postAuthEmail({ action: 'recovery', email })
+      const { error } = await getSupabase().auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${siteUrl}/reset-password`,
+      })
+      if (error) throw error
     },
     async updatePassword(password) {
       const { error } = await getSupabase().auth.updateUser({ password })

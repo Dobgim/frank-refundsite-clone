@@ -243,7 +243,7 @@ export function AdminPage() {
           ) : activeTab === 'Verifications' ? (
             <VerificationsView verifications={verifications} profilesById={profilesById} isLoading={isLoading} onUpdated={() => void loadData()} />
           ) : activeTab === 'Users' ? (
-            <UsersView profiles={profiles} isLoading={isLoading} currentUserId={session?.user.id ?? ''} accessToken={session?.access_token ?? ''} onDeleted={() => void loadData()} />
+            <UsersView profiles={profiles} isLoading={isLoading} currentUserId={session?.user.id ?? ''} onDeleted={() => void loadData()} />
           ) : activeTab === 'Documents' ? (
             <DocumentsView
               documents={documents}
@@ -448,17 +448,31 @@ function RequestReviewCard({ request, email, onUpdated }: { request: CaseRequest
   )
 }
 
+/** Removes every object under `prefix` (recursively) from a private storage bucket. */
+async function removeStorageFolder(bucket: string, prefix: string): Promise<void> {
+  const storage = getSupabase().storage.from(bucket)
+  for (;;) {
+    const { data: entries, error } = await storage.list(prefix, { limit: 100, offset: 0 })
+    if (error) throw error
+    const files = entries.filter((entry) => entry.id !== null).map((entry) => `${prefix}/${entry.name}`)
+    for (const folder of entries.filter((entry) => entry.id === null)) {
+      await removeStorageFolder(bucket, `${prefix}/${folder.name}`)
+    }
+    if (files.length === 0) return
+    const { error: removeError } = await storage.remove(files)
+    if (removeError) throw removeError
+  }
+}
+
 function UsersView({
   profiles,
   isLoading,
   currentUserId,
-  accessToken,
   onDeleted,
 }: {
   profiles: AdminProfile[]
   isLoading: boolean
   currentUserId: string
-  accessToken: string
   onDeleted: () => void
 }) {
   const [confirmingId, setConfirmingId] = useState('')
@@ -469,16 +483,13 @@ function UsersView({
     setNotice('')
     setDeletingId(profile.id)
     try {
-      const response = await fetch('/api/admin-delete-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ userId: profile.id }),
-      })
-      const result: unknown = await response.json().catch(() => null)
-      if (!response.ok) {
-        const message = typeof result === 'object' && result !== null && 'error' in result && typeof result.error === 'string' ? result.error : `Request failed (${response.status}).`
-        throw new Error(message)
+      const client = getSupabase()
+      // Private files are not removed by the database cascade, so delete them first.
+      for (const bucket of ['case-documents', 'identity-verifications']) {
+        await removeStorageFolder(bucket, profile.id)
       }
+      const { error } = await client.rpc('admin_delete_user', { target_user_id: profile.id })
+      if (error) throw error
       setNotice(`${profile.email} was deleted along with their requests and private files.`)
       setConfirmingId('')
       onDeleted()

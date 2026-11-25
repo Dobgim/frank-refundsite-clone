@@ -56,14 +56,15 @@ them with website records. Wait for DNS propagation until Vercel shows the
 domain as valid.
 
 Account emails (signup confirmation, resend confirmation, and password reset)
-are sent by the `/api/auth-email` Vercel function from
-`info@whitehillesettlement.online`, not by Supabase. The function generates the
-one-time link with the Supabase admin API (which sends nothing itself) and
-emails a link to this site's `/auth/confirm` or `/reset-password` page, which
-verifies the token. It needs the server variables `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and
-`SMTP_PASS`. Keep **Confirm email** enabled in Supabase Auth so unconfirmed
-accounts cannot sign in. Administrators are sent to `/admin` when they sign in.
+are sent by Supabase Auth through **Custom SMTP** in **Supabase → Authentication
+→ Emails → SMTP Settings**: host `smtp.hostinger.com`, port `465`, username and
+sender `info@whitehillesettlement.online`, sender name `Whitehill Settlement`,
+and the mailbox password. Supabase's built-in sender only delivers to project
+team members, so Custom SMTP is required for real users. The email templates
+link to this site's `/auth/confirm?token_hash={{ .TokenHash }}&type=signup` and
+`/reset-password?token_hash={{ .TokenHash }}&type=recovery` pages, which verify
+the token. Keep **Confirm email** enabled so unconfirmed accounts cannot sign
+in. Administrators are sent to `/admin` when they sign in.
 
 The contact form sends submissions to `info@whitehillesettlement.online` from a
 Vercel server function. In **Vercel Dashboard → your project → Settings →
@@ -97,12 +98,12 @@ the admin **Verifications** tab, compare the face photo with the document, and
 approve or reject (with a note). The gate is enforced by row-level security, not
 only in the UI. A rejected member can resubmit.
 
-Administrators can delete member accounts from the admin **Users** tab. This
-calls `/api/admin-delete-user`, which verifies the caller is an admin, removes
-the member's private files, and deletes the auth user (database rows cascade).
-It uses the same server-only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
-variables as the cleanup job. Admin accounts cannot be deleted from the
-dashboard. Re-run `supabase/schema.sql` after pulling these changes.
+Administrators can delete member accounts from the admin **Users** tab. The
+dashboard removes the member's private files, then calls the
+`public.admin_delete_user` database function, which checks the caller's admin
+role and deletes the auth user (database rows cascade). Admin accounts cannot
+be deleted from the dashboard. Re-run `supabase/schema.sql` after pulling these
+changes.
 
 There are no default admin credentials in this repository. Register and confirm
 an account using an email address you control, then grant the `admin` role in
