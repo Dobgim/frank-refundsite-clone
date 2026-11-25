@@ -32,9 +32,32 @@ Before using registration, apply [`supabase/schema.sql`](./supabase/schema.sql)
 in the Supabase SQL Editor. It creates a profiles table, a user-profile trigger,
 and row-level security so members can read their own data and admins can read
 member profiles. Supabase Auth stores and verifies passwords; this app never
-stores password values in the profiles table. Configure the Supabase Auth site
-URL and redirect URLs for your local and deployed domains. If email confirmation
-is enabled, users must confirm their email before their first sign-in.
+stores password values in the profiles table. Set the Supabase Auth site URL to
+`https://www.whitehillesettlement.online` and add
+`https://www.whitehillesettlement.online/**` to its allowed redirect URLs. Add
+`http://localhost:5173/**` for local development. Set `VITE_SITE_URL` to the
+production URL in the Vercel project environment; signup confirmation links
+return users to `/login`, and password reset links return them to
+`/reset-password`. Enable email confirmations in Supabase Auth so new users
+must verify their email before signing in.
+
+## Custom domain and email
+
+In the Vercel project settings, add `www.whitehillesettlement.online` as a
+domain and apply the DNS records Vercel provides in Hostinger. Keep Hostinger's
+mail-related MX, SPF, and DKIM records in place; do not replace them with
+website records.
+
+To send Supabase authentication messages (including signup confirmation and
+password reset) from `info@whitehillesettlement.online`, configure Custom SMTP
+in the Supabase project's Auth SMTP settings using the SMTP server details
+shown in Hostinger. Set the sender name to `Whitehill Settlement`, the sender
+email and SMTP username to `info@whitehillesettlement.online`, and use the
+mailbox's SMTP password. Enable email confirmations in Supabase Auth and ensure
+the confirmation email template uses the Supabase confirmation URL
+(`{{ .ConfirmationURL }}`). Keep the SMTP password in the Supabase dashboard
+only; never put it in this repository, Vercel client-side environment
+variables, or GitHub.
 
 To grant admin access, use the Supabase SQL Editor for the exact admin email:
 

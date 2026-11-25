@@ -7,7 +7,7 @@ export function ContactPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setNotice('This preview is not connected to a messaging service. Please email info@whitehillesettlement.com.com to reach the team.')
+    setNotice('This preview is not connected to a messaging service. Please email info@whitehillesettlement.online to reach the team.')
   }
 
   return (
@@ -40,7 +40,7 @@ export function ContactPage() {
             <ContactInfo icon={MapPin} title="Office" text="100 N Tryon St, Charlotte, NC 28202" />
             <ContactInfo icon={Clock3} title="Work Hours" text="Every day, 07 am – 07 pm" />
             <ContactInfo icon={Phone} title="Customer Support" text="Live Chat" />
-            <ContactInfo icon={Mail} title="Email" text="info@whitehillesettlement.com.com" />
+            <ContactInfo icon={Mail} title="Email" text="info@whitehillesettlement.online" />
             <img className="contact-decoration" src="/assets/indian-operator-assistant-using-a-microphone-headset-while-conversing-with-a-customer.webp" alt="" />
           </aside>
         </div>

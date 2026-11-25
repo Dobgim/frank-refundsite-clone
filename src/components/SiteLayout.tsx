@@ -128,7 +128,7 @@ function Footer() {
         </div>
         <div className="footer-column">
           <h3>Get in touch</h3>
-          <a href="mailto:info@whitehillesettlement.com.com">info@whitehillesettlement.com.com</a>
+          <a href="mailto:info@whitehillesettlement.online">info@whitehillesettlement.online</a>
           <a href="tel:+6211144490">+62 111-444-90</a>
           <span>100 N Tryon St, Charlotte, NC 28202</span>
         </div>

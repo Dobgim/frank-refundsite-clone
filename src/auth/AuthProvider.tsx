@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js'
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase'
 import { AuthContext, type AuthContextValue } from './AuthContext'
 
+const siteUrl = import.meta.env.VITE_SITE_URL || window.location.origin
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(isSupabaseConfigured)
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: {
           data: profile,
+          emailRedirectTo: `${siteUrl}/login`,
         },
       })
       if (error) throw error
@@ -55,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async requestPasswordReset(email) {
       const { error } = await getSupabase().auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${siteUrl}/reset-password`,
       })
       if (error) throw error
     },
