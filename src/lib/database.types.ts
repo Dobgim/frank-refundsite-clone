@@ -3,6 +3,10 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type CaseRequestType = 'claim' | 'verification' | 'loan' | 'withdrawal' | 'support'
 export type CaseRequestStatus = 'submitted' | 'under_review' | 'needs_information' | 'approved' | 'declined' | 'resolved'
 
+export type ProfileVerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected'
+export type VerificationStatus = 'pending' | 'approved' | 'rejected'
+export type VerificationDocumentType = 'id_card' | 'passport' | 'license'
+
 export type Database = {
   public: {
     Tables: {
@@ -82,6 +86,7 @@ export type Database = {
           account_purpose: string
           created_at: string
           updated_at: string
+          verification_status: ProfileVerificationStatus
         }
         Insert: {
           id: string
@@ -112,6 +117,39 @@ export type Database = {
           currency?: string
           account_purpose?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      identity_verifications: {
+        Row: {
+          id: string
+          user_id: string
+          document_type: VerificationDocumentType
+          document_storage_path: string
+          document_file_name: string
+          document_back_storage_path: string | null
+          document_back_file_name: string | null
+          selfie_storage_path: string
+          selfie_file_name: string
+          status: VerificationStatus
+          admin_note: string | null
+          created_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+        }
+        Insert: {
+          user_id: string
+          document_type: VerificationDocumentType
+          document_storage_path: string
+          document_file_name: string
+          document_back_storage_path?: string | null
+          document_back_file_name?: string | null
+          selfie_storage_path: string
+          selfie_file_name: string
+        }
+        Update: {
+          status?: VerificationStatus
+          admin_note?: string | null
         }
         Relationships: []
       }

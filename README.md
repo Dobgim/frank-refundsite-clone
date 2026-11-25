@@ -87,6 +87,24 @@ Settings → Environment Variables. These are server-only secrets. Never prefix
 the service-role key with `VITE_`, expose it to client code, or commit it. The
 case request records remain available after document cleanup.
 
+### Identity verification and user deletion
+
+Members must verify their identity before they can start claims, withdrawals,
+loans, or other requests (customer service stays available). From the dashboard
+**Verification** tab they choose an ID card, passport, or driver's license,
+upload it, and take a live face photo with their camera. Files are stored in the
+private `identity-verifications` bucket. Administrators review submissions in
+the admin **Verifications** tab, compare the face photo with the document, and
+approve or reject (with a note). The gate is enforced by row-level security, not
+only in the UI. A rejected member can resubmit.
+
+Administrators can delete member accounts from the admin **Users** tab. This
+calls `/api/admin-delete-user`, which verifies the caller is an admin, removes
+the member's private files, and deletes the auth user (database rows cascade).
+It uses the same server-only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+variables as the cleanup job. Admin accounts cannot be deleted from the
+dashboard. Re-run `supabase/schema.sql` after pulling these changes.
+
 There are no default admin credentials in this repository. Register and confirm
 an account using an email address you control, then grant the `admin` role in
 the Supabase SQL Editor for that exact account email. That account uses the

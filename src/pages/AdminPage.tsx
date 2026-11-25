@@ -15,15 +15,18 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  Trash2,
+  UserCheck,
   Users,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { formatCurrency, isCurrency } from '../currency'
 import { getSupabase } from '../lib/supabase'
-import type { CaseRequestStatus, Database } from '../lib/database.types'
-import { requestStatusLabels, requestTypeLabels } from '../lib/cases'
+import type { CaseRequestStatus, Database, VerificationStatus } from '../lib/database.types'
+import { documentTypeLabels, requestStatusLabels, requestTypeLabels, verificationStatusClass, verificationStatusLabels } from '../lib/cases'
 import '../dashboard.css'
 import '../admin.css'
 
@@ -42,7 +45,15 @@ type AdminTab =
 type CaseRequest = Database['public']['Tables']['case_requests']['Row']
 type CaseDocument = Database['public']['Tables']['case_documents']['Row']
 type Profile = Database['public']['Tables']['profiles']['Row']
-type AdminProfile = Pick<Profile, 'id' | 'email' | 'first_name' | 'middle_name' | 'last_name' | 'country' | 'created_at'>
+type AdminProfile = Pick<Profile, 'id' | 'email' | 'first_name' | 'middle_name' | 'last_name' | 'country' | 'created_at' | 'verification_status'>
+type IdentityVerification = Database['public']['Tables']['identity_verifications']['Row']
+
+const profileColumns = 'id, email, first_name, middle_name, last_name, country, created_at, verification_status'
+
+function displayName(profile: AdminProfile | undefined) {
+  if (!profile) return 'Member'
+  return [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ') || profile.email
+}
 
 const navigation: { label: AdminTab; icon: LucideIcon }[] = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -69,10 +80,10 @@ const statusOptions: CaseRequestStatus[] = [
 const descriptions: Record<AdminTab, string> = {
   Dashboard: 'Case volume, review queue, and the most recent submissions.',
   Claims: 'Review claim requests submitted by members.',
-  Verifications: 'Review verification requests and any private supporting files.',
+  Verifications: 'Review identity documents and face photos, then approve or reject each member.',
   Withdrawals: 'Review withdrawal requests. This dashboard does not move funds.',
   'Loan applications': 'Review loan inquiries. An approval here does not create or disburse a loan.',
-  Users: 'View registered member profiles.',
+  Users: 'View registered members, their verification status, and remove accounts.',
   Documents: 'Open private supporting files using short-lived secure links.',
   'Customer service': 'Review support requests submitted by members.',
   'Case messages': 'Review support requests and share a staff update with the member.',
@@ -85,6 +96,7 @@ export function AdminPage() {
   const [requests, setRequests] = useState<CaseRequest[]>([])
   const [documents, setDocuments] = useState<CaseDocument[]>([])
   const [profiles, setProfiles] = useState<AdminProfile[]>([])
+  const [verifications, setVerifications] = useState<IdentityVerification[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
@@ -95,17 +107,20 @@ export function AdminPage() {
     setError('')
     try {
       const client = getSupabase()
-      const [requestResult, profileResult, documentResult] = await Promise.all([
+      const [requestResult, profileResult, documentResult, verificationResult] = await Promise.all([
         client.from('case_requests').select('*').order('created_at', { ascending: false }),
-        client.from('profiles').select('id, email, first_name, middle_name, last_name, country, created_at').order('created_at', { ascending: false }),
+        client.from('profiles').select(profileColumns).order('created_at', { ascending: false }),
         client.from('case_documents').select('*').order('created_at', { ascending: false }),
+        client.from('identity_verifications').select('*').order('created_at', { ascending: false }),
       ])
       if (requestResult.error) throw requestResult.error
       if (profileResult.error) throw profileResult.error
       if (documentResult.error) throw documentResult.error
+      if (verificationResult.error) throw verificationResult.error
       setRequests(requestResult.data)
       setProfiles(profileResult.data)
       setDocuments(documentResult.data)
+      setVerifications(verificationResult.data)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load the administration dashboard.')
     } finally {
@@ -123,12 +138,12 @@ export function AdminPage() {
     .reduce((sum, request) => sum + (request.requested_amount ?? 0), 0)
   const pendingCount = requests.filter((request) => request.status === 'submitted').length
   const activeCount = requests.filter((request) => !['declined', 'resolved'].includes(request.status)).length
+  const pendingVerificationCount = verifications.filter((verification) => verification.status === 'pending').length
   const resolvedCount = requests.filter((request) => request.status === 'declined' || request.status === 'resolved').length
 
   const visibleRequests = useMemo(() => {
     switch (activeTab) {
       case 'Claims': return requests.filter((request) => request.request_type === 'claim')
-      case 'Verifications': return requests.filter((request) => request.request_type === 'verification')
       case 'Withdrawals': return requests.filter((request) => request.request_type === 'withdrawal')
       case 'Loan applications': return requests.filter((request) => request.request_type === 'loan')
       case 'Customer service':
@@ -218,14 +233,17 @@ export function AdminPage() {
               activeCount={activeCount}
               resolvedCount={resolvedCount}
               userCount={profiles.length}
+              pendingVerificationCount={pendingVerificationCount}
               totalRequested={totalRequestedUSD}
               requests={requests}
               isLoading={isLoading}
               profilesById={profilesById}
               onOpenClaims={() => setActiveTab('Claims')}
             />
+          ) : activeTab === 'Verifications' ? (
+            <VerificationsView verifications={verifications} profilesById={profilesById} isLoading={isLoading} onUpdated={() => void loadData()} />
           ) : activeTab === 'Users' ? (
-            <UsersView profiles={profiles} isLoading={isLoading} />
+            <UsersView profiles={profiles} isLoading={isLoading} currentUserId={session?.user.id ?? ''} accessToken={session?.access_token ?? ''} onDeleted={() => void loadData()} />
           ) : activeTab === 'Documents' ? (
             <DocumentsView
               documents={documents}
@@ -259,6 +277,7 @@ function DashboardOverview({
   activeCount,
   resolvedCount,
   userCount,
+  pendingVerificationCount,
   totalRequested,
   requests,
   isLoading,
@@ -270,6 +289,7 @@ function DashboardOverview({
   activeCount: number
   resolvedCount: number
   userCount: number
+  pendingVerificationCount: number
   totalRequested: number
   requests: CaseRequest[]
   isLoading: boolean
@@ -282,6 +302,7 @@ function DashboardOverview({
     { title: 'Active review', value: activeCount, icon: FolderOpen, tone: 'slate' },
     { title: 'Resolved', value: resolvedCount, icon: CheckCircle2, tone: 'green' },
     { title: 'Registered users', value: userCount, icon: Users, tone: 'violet' },
+    { title: 'Pending verifications', value: pendingVerificationCount, icon: UserCheck, tone: 'amber' },
   ]
 
   return (
@@ -427,26 +448,244 @@ function RequestReviewCard({ request, email, onUpdated }: { request: CaseRequest
   )
 }
 
-function UsersView({ profiles, isLoading }: { profiles: AdminProfile[]; isLoading: boolean }) {
+function UsersView({
+  profiles,
+  isLoading,
+  currentUserId,
+  accessToken,
+  onDeleted,
+}: {
+  profiles: AdminProfile[]
+  isLoading: boolean
+  currentUserId: string
+  accessToken: string
+  onDeleted: () => void
+}) {
+  const [confirmingId, setConfirmingId] = useState('')
+  const [deletingId, setDeletingId] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function deleteUser(profile: AdminProfile) {
+    setNotice('')
+    setDeletingId(profile.id)
+    try {
+      const response = await fetch('/api/admin-delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ userId: profile.id }),
+      })
+      const result: unknown = await response.json().catch(() => null)
+      if (!response.ok) {
+        const message = typeof result === 'object' && result !== null && 'error' in result && typeof result.error === 'string' ? result.error : `Request failed (${response.status}).`
+        throw new Error(message)
+      }
+      setNotice(`${profile.email} was deleted along with their requests and private files.`)
+      setConfirmingId('')
+      onDeleted()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to delete this user.')
+    } finally {
+      setDeletingId('')
+    }
+  }
+
   return (
     <section className="dashboard-panel admin-data-panel">
-      <div className="dashboard-panel-heading"><div><h2>Registered users</h2><p>Only profile details needed to identify the submitting member are shown.</p></div></div>
+      <div className="dashboard-panel-heading"><div><h2>Registered users</h2><p>Deleting a user permanently removes their account, requests, verification records, and private files.</p></div></div>
+      {notice && <p className="admin-inline-notice admin-users-notice" role="status">{notice}</p>}
       {isLoading ? <p className="admin-empty">Loading users…</p> : profiles.length === 0 ? <p className="admin-empty">No registered users found.</p> : (
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Name</th><th>Email</th><th>Country</th><th>Joined</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Country</th><th>Identity</th><th>Joined</th><th>Actions</th></tr></thead>
             <tbody>{profiles.map((profile) => (
               <tr key={profile.id}>
                 <td>{[profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(' ') || '—'}</td>
                 <td>{profile.email}</td>
                 <td>{profile.country || '—'}</td>
+                <td><span className={`case-status ${verificationStatusClass[profile.verification_status]}`}>{verificationStatusLabels[profile.verification_status]}</span></td>
                 <td>{new Date(profile.created_at).toLocaleDateString()}</td>
+                <td>
+                  {profile.id === currentUserId ? <small className="admin-file-meta">You</small>
+                    : confirmingId === profile.id ? (
+                      <span className="admin-delete-confirm">
+                        <button className="admin-danger-button" type="button" disabled={deletingId === profile.id} onClick={() => void deleteUser(profile)}>
+                          {deletingId === profile.id ? 'Deleting…' : 'Confirm delete'}
+                        </button>
+                        <button className="admin-link-button" type="button" disabled={deletingId === profile.id} onClick={() => setConfirmingId('')}>Cancel</button>
+                      </span>
+                    ) : (
+                      <button className="admin-link-button admin-delete-link" type="button" onClick={() => { setNotice(''); setConfirmingId(profile.id) }}>
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
+                </td>
               </tr>
             ))}</tbody>
           </table>
         </div>
       )}
     </section>
+  )
+}
+
+const verificationFilters: { value: VerificationStatus | 'all'; label: string }[] = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'all', label: 'All' },
+]
+
+function VerificationsView({
+  verifications,
+  profilesById,
+  isLoading,
+  onUpdated,
+}: {
+  verifications: IdentityVerification[]
+  profilesById: Map<string, AdminProfile>
+  isLoading: boolean
+  onUpdated: () => void
+}) {
+  const [filter, setFilter] = useState<VerificationStatus | 'all'>('pending')
+  const visible = filter === 'all' ? verifications : verifications.filter((verification) => verification.status === filter)
+
+  return (
+    <>
+      <div className="admin-filter-tabs" role="tablist" aria-label="Filter verifications">
+        {verificationFilters.map(({ value, label }) => (
+          <button key={value} type="button" role="tab" aria-selected={filter === value} className={filter === value ? 'is-active' : ''} onClick={() => setFilter(value)}>
+            {label}
+            <span>{value === 'all' ? verifications.length : verifications.filter((verification) => verification.status === value).length}</span>
+          </button>
+        ))}
+      </div>
+      {isLoading ? <p className="admin-empty">Loading verifications…</p> : visible.length === 0 ? (
+        <p className="admin-empty admin-panel-empty">No {filter === 'all' ? '' : `${filter} `}identity verifications.</p>
+      ) : (
+        <div className="admin-request-list">
+          {visible.map((verification) => (
+            <VerificationReviewCard key={verification.id} verification={verification} profile={profilesById.get(verification.user_id)} onUpdated={onUpdated} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+function VerificationReviewCard({
+  verification,
+  profile,
+  onUpdated,
+}: {
+  verification: IdentityVerification
+  profile: AdminProfile | undefined
+  onUpdated: () => void
+}) {
+  const [note, setNote] = useState(verification.admin_note ?? '')
+  const [notice, setNotice] = useState('')
+  const [savingStatus, setSavingStatus] = useState<VerificationStatus | ''>('')
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  const [loadError, setLoadError] = useState('')
+
+  const files = useMemo(() => [
+    { key: 'front', label: verification.document_type === 'passport' ? 'Passport photo page' : 'Document front', path: verification.document_storage_path },
+    ...(verification.document_back_storage_path ? [{ key: 'back', label: 'Document back', path: verification.document_back_storage_path }] : []),
+    { key: 'selfie', label: 'Live face photo', path: verification.selfie_storage_path },
+  ], [verification])
+
+  useEffect(() => {
+    let active = true
+    void getSupabase()
+      .storage
+      .from('identity-verifications')
+      .createSignedUrls(files.map(({ path }) => path), 300)
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          setLoadError(error.message)
+          return
+        }
+        const next: Record<string, string> = {}
+        data.forEach((entry, index) => {
+          if (entry.signedUrl) next[files[index].key] = entry.signedUrl
+        })
+        setUrls(next)
+      })
+    return () => { active = false }
+  }, [files])
+
+  async function review(status: VerificationStatus) {
+    setNotice('')
+    if (status === 'rejected' && !note.trim()) {
+      setNotice('Add a note explaining why the verification was rejected so the member knows what to fix.')
+      return
+    }
+    setSavingStatus(status)
+    try {
+      const { error } = await getSupabase()
+        .from('identity_verifications')
+        .update({ status, admin_note: note.trim() || null })
+        .eq('id', verification.id)
+      if (error) throw error
+      onUpdated()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Unable to save the review.')
+    } finally {
+      setSavingStatus('')
+    }
+  }
+
+  return (
+    <article className="admin-request-card">
+      <div className="admin-request-heading">
+        <div>
+          <span className="admin-request-kind">Identity verification · {documentTypeLabels[verification.document_type]}</span>
+          <h2>{displayName(profile)}</h2>
+          <p>{profile?.email ?? 'Member'}{profile?.country ? ` · ${profile.country}` : ''} · Submitted {new Date(verification.created_at).toLocaleString()}</p>
+        </div>
+        <span className={`case-status ${verificationStatusClass[verification.status]}`}>{verificationStatusLabels[verification.status]}</span>
+      </div>
+
+      {loadError && <p className="admin-error" role="alert">{loadError}</p>}
+      <div className="admin-verification-files">
+        {files.map(({ key, label, path }) => {
+          const url = urls[key]
+          const isPdf = path.toLowerCase().endsWith('.pdf')
+          return (
+            <figure key={key} className={key === 'selfie' ? 'is-selfie' : ''}>
+              <figcaption>{label}</figcaption>
+              {!url ? <div className="admin-file-loading">Loading…</div>
+                : isPdf ? <a className="admin-file-loading" href={url} target="_blank" rel="noreferrer"><FileText size={20} /> Open PDF</a>
+                  : <a href={url} target="_blank" rel="noreferrer" title="Open full size"><img src={url} alt={`${label} for ${profile?.email ?? 'member'}`} /></a>}
+            </figure>
+          )
+        })}
+      </div>
+      <p className="admin-file-meta">Compare the face photo with the photo on the document. Links expire after 5 minutes — refresh to renew.</p>
+
+      {verification.reviewed_at && (
+        <div className="admin-request-meta"><span>Reviewed: {new Date(verification.reviewed_at).toLocaleString()}</span></div>
+      )}
+
+      <div className="admin-review-form admin-verification-actions">
+        <label>Note for the member {verification.status === 'pending' && <small>(required when rejecting)</small>}
+          <textarea value={note} onChange={(event) => setNote(event.currentTarget.value)} maxLength={1000} rows={2} placeholder="e.g. The document photo is blurry — please upload a clearer image." />
+        </label>
+        <div className="admin-verification-buttons">
+          {verification.status !== 'approved' && (
+            <button className="dashboard-primary-button" type="button" disabled={savingStatus !== ''} onClick={() => void review('approved')}>
+              <CheckCircle2 size={15} /> {savingStatus === 'approved' ? 'Approving…' : 'Approve'}
+            </button>
+          )}
+          {verification.status !== 'rejected' && (
+            <button className="admin-danger-button" type="button" disabled={savingStatus !== ''} onClick={() => void review('rejected')}>
+              <XCircle size={15} /> {savingStatus === 'rejected' ? 'Rejecting…' : 'Reject'}
+            </button>
+          )}
+        </div>
+        {notice && <p className="admin-inline-notice" role="alert">{notice}</p>}
+      </div>
+    </article>
   )
 }
 

@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Headset,
   Hourglass,
+  Lock,
   Landmark,
   LifeBuoy,
   LayoutDashboard,
@@ -29,12 +30,14 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { currencyOptions, formatCurrency, isCurrency, type Currency } from '../currency'
 import { useAuth } from '../auth/useAuth'
 import { CaseRequestForm } from '../components/CaseRequestForm'
+import { IdentityVerificationPanel } from '../components/IdentityVerificationPanel'
 import { getSupabase } from '../lib/supabase'
-import type { Database } from '../lib/database.types'
-import { requestStatusLabels, requestTypeLabels } from '../lib/cases'
+import type { Database, ProfileVerificationStatus } from '../lib/database.types'
+import { requestStatusLabels, requestTypeLabels, verificationStatusClass, verificationStatusLabels } from '../lib/cases'
 import '../dashboard.css'
 
 type CaseRequest = Database['public']['Tables']['case_requests']['Row']
+type IdentityVerification = Database['public']['Tables']['identity_verifications']['Row']
 
 type DashboardTab =
   | 'Overview'
@@ -73,6 +76,9 @@ const navigation: { label: DashboardTab; icon: LucideIcon }[] = [
   { label: 'Contact Support', icon: Headset },
 ]
 
+/** Tabs that submit requests and therefore require an approved identity verification. */
+const verificationRequiredTabs = new Set<DashboardTab>(['Start a Claim', 'Fund Transfer', 'Withdraw', 'Pay Bill', 'DPS', 'FDR', 'Loan'])
+
 const quickActions: { label: string; icon: LucideIcon; tab: DashboardTab }[] = [
   { label: 'Send money', icon: Send, tab: 'Fund Transfer' },
   { label: 'Withdraw', icon: Banknote, tab: 'Withdraw' },
@@ -91,6 +97,10 @@ export function DashboardPage() {
   const [caseRequests, setCaseRequests] = useState<CaseRequest[]>([])
   const [caseError, setCaseError] = useState('')
   const [isLoadingCases, setIsLoadingCases] = useState(true)
+  const [verificationStatus, setVerificationStatus] = useState<ProfileVerificationStatus>('unverified')
+  const [latestVerification, setLatestVerification] = useState<IdentityVerification | null>(null)
+  const [isLoadingVerification, setIsLoadingVerification] = useState(true)
+  const [verificationError, setVerificationError] = useState('')
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedCurrency = searchParams.get('currency')
   const currency = isCurrency(requestedCurrency) ? requestedCurrency : 'USD'
@@ -128,6 +138,37 @@ export function DashboardPage() {
   useEffect(() => {
     void loadCaseRequests()
   }, [loadCaseRequests])
+
+  const loadVerification = useCallback(async () => {
+    if (!userId) {
+      setIsLoadingVerification(false)
+      return
+    }
+    setIsLoadingVerification(true)
+    try {
+      const client = getSupabase()
+      const [profileResult, verificationResult] = await Promise.all([
+        client.from('profiles').select('verification_status').eq('id', userId).maybeSingle(),
+        client.from('identity_verifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      if (profileResult.error) throw profileResult.error
+      if (verificationResult.error) throw verificationResult.error
+      setVerificationStatus(profileResult.data?.verification_status ?? 'unverified')
+      setLatestVerification(verificationResult.data)
+      setVerificationError('')
+    } catch (error) {
+      setVerificationError(error instanceof Error ? error.message : 'Unable to load your verification status.')
+    } finally {
+      setIsLoadingVerification(false)
+    }
+  }, [userId])
+
+  useEffect(() => {
+    void loadVerification()
+  }, [loadVerification])
+
+  const isVerified = verificationStatus === 'approved'
+  const isLocked = verificationRequiredTabs.has(activeTab) && !isVerified
 
   useEffect(() => {
     document.title = `${activeTab} - Whitehill Dashboard`
@@ -217,8 +258,14 @@ export function DashboardPage() {
           </div>
           {signOutError && <p className="dashboard-form-notice" role="alert">{signOutError}</p>}
 
-          {activeTab === 'Overview' ? (
-            <Overview onSelect={chooseTab} currency={currency} name={fullName} email={email} country={country} createdAt={session?.user.created_at ?? ''} requests={caseRequests} isLoading={isLoadingCases} requestError={caseError} />
+          {!isLoadingVerification && !isVerified && activeTab !== 'Verification' && (
+            <VerificationBanner status={verificationStatus} onVerify={() => chooseTab('Verification')} />
+          )}
+
+          {isLocked ? (
+            <VerificationRequiredPanel title={activeTab} status={verificationStatus} isLoading={isLoadingVerification} onVerify={() => chooseTab('Verification')} />
+          ) : activeTab === 'Overview' ? (
+            <Overview onSelect={chooseTab} verificationStatus={isLoadingVerification ? null : verificationStatus} currency={currency} name={fullName} email={email} country={country} createdAt={session?.user.created_at ?? ''} requests={caseRequests} isLoading={isLoadingCases} requestError={caseError} />
           ) : activeTab === 'My Claims' ? (
             <ClaimsPanel onStart={() => chooseTab('Start a Claim')} requests={caseRequests.filter((request) => request.request_type === 'claim')} isLoading={isLoadingCases} error={caseError} />
           ) : activeTab === 'Notifications' ? (
@@ -226,7 +273,7 @@ export function DashboardPage() {
           ) : activeTab === 'Start a Claim' ? (
             <CaseRequestForm key={activeTab} requestType="claim" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
           ) : activeTab === 'Verification' ? (
-            <CaseRequestForm key={activeTab} requestType="verification" userId={userId ?? ''} currency={currency} onSubmitted={loadCaseRequests} />
+            <IdentityVerificationPanel userId={userId ?? ''} status={verificationStatus} latest={latestVerification} isLoading={isLoadingVerification} loadError={verificationError} onSubmitted={loadVerification} />
           ) : activeTab === 'Settings' ? (
             <SettingsPanel currency={currency} onCurrencyChange={chooseCurrency} />
           ) : activeTab === 'Withdraw' ? (
@@ -252,6 +299,7 @@ export function DashboardPage() {
 
 function Overview({
   onSelect,
+  verificationStatus,
   currency,
   name,
   email,
@@ -262,6 +310,7 @@ function Overview({
   requestError,
 }: {
   onSelect: (tab: DashboardTab) => void
+  verificationStatus: ProfileVerificationStatus | null
   currency: Currency
   name: string
   email: string
@@ -297,6 +346,11 @@ function Overview({
       <section className="dashboard-account-status">
         <span className="status-icon"><ShieldCheck size={19} /></span>
         <div><strong>Account status: <b>Active</b></strong><span>{email} · {country}</span></div>
+        {verificationStatus && (
+          <button className={`case-status verification-pill ${verificationStatusClass[verificationStatus]}`} type="button" onClick={() => onSelect('Verification')}>
+            Identity: {verificationStatusLabels[verificationStatus]}
+          </button>
+        )}
         <span className="member-date">Member since {createdAt ? new Date(createdAt).toLocaleDateString() : '—'}</span>
       </section>
 
@@ -319,6 +373,49 @@ function Overview({
         </div>
       </section>
     </>
+  )
+}
+
+function VerificationBanner({ status, onVerify }: { status: ProfileVerificationStatus; onVerify: () => void }) {
+  const message = status === 'pending'
+    ? 'Your identity documents are being reviewed. Claims and other requests unlock once an administrator approves them.'
+    : status === 'rejected'
+      ? 'Your identity verification was not approved. Please resubmit to unlock claims and other requests.'
+      : 'Verify your identity with a government ID and a face photo to start claims and other requests.'
+  return (
+    <div className="verification-banner" role="status">
+      <ShieldAlert size={18} />
+      <p>{message}</p>
+      {status !== 'pending' && <button className="dashboard-primary-button" type="button" onClick={onVerify}>Verify now <ArrowRight size={14} /></button>}
+    </div>
+  )
+}
+
+function VerificationRequiredPanel({
+  title,
+  status,
+  isLoading,
+  onVerify,
+}: {
+  title: string
+  status: ProfileVerificationStatus
+  isLoading: boolean
+  onVerify: () => void
+}) {
+  if (isLoading) return <section className="dashboard-panel dashboard-page-panel"><p className="dashboard-muted-note">Checking your verification status…</p></section>
+  return (
+    <section className="dashboard-panel dashboard-page-panel">
+      <div className="dashboard-empty-state spacious">
+        <span><Lock size={22} /></span>
+        <strong>Identity verification required</strong>
+        <p>
+          {status === 'pending'
+            ? `Your documents are under review. ${title} will be available as soon as your identity is approved.`
+            : `To use ${title}, first verify your identity with an ID card, passport, or driver's license and a live face photo.`}
+        </p>
+        {status !== 'pending' && <button className="dashboard-primary-button" type="button" onClick={onVerify}><ShieldCheck size={15} /> Verify my identity</button>}
+      </div>
+    </section>
   )
 }
 

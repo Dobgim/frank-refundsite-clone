@@ -15,6 +15,13 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Members can never write this column (it is not in the update grant below);
+-- it is maintained by the identity verification trigger.
+alter table public.profiles add column if not exists verification_status text not null default 'unverified';
+alter table public.profiles drop constraint if exists profiles_verification_status_check;
+alter table public.profiles add constraint profiles_verification_status_check
+  check (verification_status in ('unverified', 'pending', 'approved', 'rejected'));
+
 alter table public.profiles enable row level security;
 revoke all on table public.profiles from anon, authenticated;
 grant select on table public.profiles to authenticated;
@@ -133,7 +140,17 @@ create policy "Admins can read all case requests"
 drop policy if exists "Members can submit own case requests" on public.case_requests;
 create policy "Members can submit own case requests"
   on public.case_requests for insert to authenticated
-  with check ((select auth.uid()) = user_id);
+  with check (
+    (select auth.uid()) = user_id
+    and (
+      -- Customer service stays open so unverified members can still ask for help.
+      request_type = 'support'
+      or exists (
+        select 1 from public.profiles p
+        where p.id = (select auth.uid()) and p.verification_status = 'approved'
+      )
+    )
+  );
 
 drop policy if exists "Admins can update case requests" on public.case_requests;
 create policy "Admins can update case requests"
@@ -306,4 +323,206 @@ create policy "Members can delete unlinked own case files"
         and r.user_id = (select auth.uid())
         and r.status = 'submitted'
     )
+  );
+
+-- ============================================================
+-- Identity verification (government ID + live selfie)
+-- ============================================================
+
+create table if not exists public.identity_verifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  document_type text not null check (document_type in ('id_card', 'passport', 'license')),
+  document_storage_path text not null,
+  document_file_name text not null check (char_length(document_file_name) between 1 and 255),
+  document_back_storage_path text,
+  document_back_file_name text check (document_back_file_name is null or char_length(document_back_file_name) between 1 and 255),
+  selfie_storage_path text not null,
+  selfie_file_name text not null check (char_length(selfie_file_name) between 1 and 255),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  admin_note text check (admin_note is null or char_length(admin_note) <= 1000),
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by uuid references auth.users (id) on delete set null
+);
+
+-- Upgrade path for databases that applied an earlier draft of this table.
+alter table public.identity_verifications drop constraint if exists one_active_verification;
+alter table public.identity_verifications add column if not exists document_back_storage_path text;
+alter table public.identity_verifications add column if not exists document_back_file_name text;
+alter table public.identity_verifications add column if not exists reviewed_by uuid references auth.users (id) on delete set null;
+drop index if exists public.identity_verifications_user_idx;
+
+-- At most one submission awaiting review per member; rejected members may resubmit.
+create unique index if not exists identity_verifications_one_pending_idx
+  on public.identity_verifications (user_id)
+  where status = 'pending';
+create index if not exists identity_verifications_user_created_idx
+  on public.identity_verifications (user_id, created_at desc);
+create index if not exists identity_verifications_status_idx
+  on public.identity_verifications (status, created_at desc);
+
+alter table public.identity_verifications enable row level security;
+revoke all on table public.identity_verifications from anon, authenticated;
+grant select on table public.identity_verifications to authenticated;
+grant insert (user_id, document_type, document_storage_path, document_file_name,
+  document_back_storage_path, document_back_file_name, selfie_storage_path, selfie_file_name)
+  on table public.identity_verifications to authenticated;
+grant update (status, admin_note) on table public.identity_verifications to authenticated;
+
+drop policy if exists "Members can read own verification" on public.identity_verifications;
+create policy "Members can read own verification"
+  on public.identity_verifications for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Admins can read all verifications" on public.identity_verifications;
+create policy "Admins can read all verifications"
+  on public.identity_verifications for select to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+drop policy if exists "Members can submit verification" on public.identity_verifications;
+create policy "Members can submit verification"
+  on public.identity_verifications for insert to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1 from public.profiles p
+      where p.id = (select auth.uid()) and p.verification_status in ('unverified', 'rejected')
+    )
+    and (storage.foldername(document_storage_path))[1] = (select auth.uid())::text
+    and (storage.foldername(selfie_storage_path))[1] = (select auth.uid())::text
+    and (
+      document_back_storage_path is null
+      or (storage.foldername(document_back_storage_path))[1] = (select auth.uid())::text
+    )
+    and exists (
+      select 1 from storage.objects o
+      where o.bucket_id = 'identity-verifications' and o.name = document_storage_path
+    )
+    and exists (
+      select 1 from storage.objects o
+      where o.bucket_id = 'identity-verifications' and o.name = selfie_storage_path
+    )
+  );
+
+drop policy if exists "Admins can update verifications" on public.identity_verifications;
+create policy "Admins can update verifications"
+  on public.identity_verifications for update to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+drop policy if exists "Admins can delete verifications" on public.identity_verifications;
+create policy "Admins can delete verifications"
+  on public.identity_verifications for delete to authenticated
+  using ((select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+create or replace function public.stamp_identity_review()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.status is distinct from old.status then
+    new.reviewed_at := case when new.status = 'pending' then null else pg_catalog.now() end;
+    new.reviewed_by := case when new.status = 'pending' then null else auth.uid() end;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists stamp_identity_review on public.identity_verifications;
+create trigger stamp_identity_review
+  before update on public.identity_verifications
+  for each row execute function public.stamp_identity_review();
+
+-- Keeps profiles.verification_status in step with the member's latest submission.
+create or replace function public.sync_profile_verification_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  latest_status text;
+begin
+  select v.status into latest_status
+  from public.identity_verifications v
+  where v.user_id = new.user_id
+  order by v.created_at desc
+  limit 1;
+
+  update public.profiles
+  set verification_status = coalesce(latest_status, 'unverified'),
+      updated_at = pg_catalog.now()
+  where id = new.user_id;
+  return null;
+end;
+$$;
+
+drop trigger if exists sync_profile_verification_status on public.identity_verifications;
+create trigger sync_profile_verification_status
+  after insert or update of status on public.identity_verifications
+  for each row execute function public.sync_profile_verification_status();
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'identity-verifications',
+  'identity-verifications',
+  false,
+  10485760,
+  array['application/pdf', 'image/jpeg', 'image/png']
+)
+on conflict (id) do update set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Members can upload own verification files" on storage.objects;
+create policy "Members can upload own verification files"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'identity-verifications'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and exists (
+      select 1 from public.profiles p
+      where p.id = (select auth.uid()) and p.verification_status in ('unverified', 'rejected')
+    )
+  );
+
+drop policy if exists "Members can read own verification files" on storage.objects;
+create policy "Members can read own verification files"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'identity-verifications'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "Members can delete unlinked own verification files" on storage.objects;
+create policy "Members can delete unlinked own verification files"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'identity-verifications'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and not exists (
+      select 1 from public.identity_verifications v
+      where v.document_storage_path = name
+        or v.document_back_storage_path = name
+        or v.selfie_storage_path = name
+    )
+  );
+
+drop policy if exists "Admins can read verification files" on storage.objects;
+create policy "Admins can read verification files"
+  on storage.objects for select to authenticated
+  using (
+    bucket_id = 'identity-verifications'
+    and (select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+drop policy if exists "Admins can delete verification files" on storage.objects;
+create policy "Admins can delete verification files"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'identity-verifications'
+    and (select auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
