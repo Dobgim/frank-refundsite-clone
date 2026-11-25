@@ -12,5 +12,7 @@ export function RequireAuth({ children, adminOnly = false }: { children: ReactNo
   if (isLoading) return <main className="auth-config-error">Checking your sign-in…</main>
   if (!session) return <Navigate to="/login" replace state={{ from: location }} />
   if (adminOnly && !isAdmin) return <Navigate to="/dashboard" replace />
+  // Administrators always use the admin console rather than the member dashboard.
+  if (!adminOnly && isAdmin) return <Navigate to="/admin" replace />
   return children
 }

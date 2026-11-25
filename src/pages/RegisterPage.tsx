@@ -8,7 +8,7 @@ import {
   LockKeyhole,
   UserRound,
 } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
 import { currencyOptions, isCurrency, type Currency } from '../currency'
 import { useAuth } from '../auth/useAuth'
@@ -17,7 +17,6 @@ const steps = ['Personal Info', 'Contact Details', 'Account Setup', 'Security']
 
 export function RegisterPage() {
   const { isConfigured, signUp } = useAuth()
-  const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [notice, setNotice] = useState('')
   const [preferredCurrency, setPreferredCurrency] = useState<Currency>('USD')
@@ -40,8 +39,8 @@ export function RegisterPage() {
     }
     setIsSubmitting(true)
     try {
-      const signedIn = await signUp({
-        email: allDetails.email,
+      await signUp({
+        email: allDetails.email.trim().toLowerCase(),
         password: String(currentDetails.password),
         profile: {
           first_name: allDetails.firstName,
@@ -56,11 +55,7 @@ export function RegisterPage() {
           account_purpose: allDetails.accountPurpose,
         },
       })
-      if (signedIn) {
-        navigate('/dashboard', { replace: true })
-      } else {
-        setNotice('Your account was created. Check your email for a confirmation link, then sign in.')
-      }
+      setNotice(`Your account was created. We sent a confirmation link to ${allDetails.email} from info@whitehillesettlement.online — click it to activate your account (check your spam folder too).`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Unable to create your account. Please try again.')
     } finally {

@@ -12,8 +12,10 @@ export type AuthContextValue = {
   isLoading: boolean
   isConfigured: boolean
   isAdmin: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signUp: (details: SignUpDetails) => Promise<boolean>
+  /** Signs in and returns where the user should land: the admin console or the member dashboard. */
+  signIn: (email: string, password: string) => Promise<'/admin' | '/dashboard'>
+  signUp: (details: SignUpDetails) => Promise<void>
+  resendConfirmation: (email: string) => Promise<void>
   signOut: () => Promise<void>
   requestPasswordReset: (email: string) => Promise<void>
   updatePassword: (password: string) => Promise<void>

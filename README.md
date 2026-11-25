@@ -55,16 +55,15 @@ Hostinger's mail-related MX, SPF, and DKIM records in place; do not replace
 them with website records. Wait for DNS propagation until Vercel shows the
 domain as valid.
 
-To send Supabase authentication messages (including signup confirmation and
-password reset) from `info@whitehillesettlement.online`, configure Custom SMTP
-in the Supabase project's Auth SMTP settings using the SMTP server details
-shown in Hostinger. Set the sender name to `Whitehill Settlement`, the sender
-email and SMTP username to `info@whitehillesettlement.online`, and use the
-mailbox's SMTP password. Enable email confirmations in Supabase Auth and ensure
-the confirmation email template uses the Supabase confirmation URL
-(`{{ .ConfirmationURL }}`). Keep the SMTP password in the Supabase dashboard
-only; never put it in this repository, Vercel client-side environment
-variables, or GitHub.
+Account emails (signup confirmation, resend confirmation, and password reset)
+are sent by the `/api/auth-email` Vercel function from
+`info@whitehillesettlement.online`, not by Supabase. The function generates the
+one-time link with the Supabase admin API (which sends nothing itself) and
+emails a link to this site's `/auth/confirm` or `/reset-password` page, which
+verifies the token. It needs the server variables `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and
+`SMTP_PASS`. Keep **Confirm email** enabled in Supabase Auth so unconfirmed
+accounts cannot sign in. Administrators are sent to `/admin` when they sign in.
 
 The contact form sends submissions to `info@whitehillesettlement.online` from a
 Vercel server function. In **Vercel Dashboard → your project → Settings →

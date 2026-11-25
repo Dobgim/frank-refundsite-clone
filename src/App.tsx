@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import { SiteLayout } from './components/SiteLayout'
 import { RequireAuth } from './components/RequireAuth'
 import { AdminPage } from './pages/AdminPage'
+import { AuthConfirmPage } from './pages/AuthConfirmPage'
 import { AboutPage } from './pages/AboutPage'
 import { ContactPage } from './pages/ContactPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -28,6 +29,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/auth/confirm" element={<AuthConfirmPage />} />
           <Route path="/dashboard" element={<RequireAuth><DashboardPage /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth adminOnly><AdminPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
